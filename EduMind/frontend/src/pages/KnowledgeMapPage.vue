@@ -49,10 +49,6 @@
           >
             <path d="M0,-5L10,0L0,5" fill="rgba(167,139,250,0.6)" />
           </marker>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
         </defs>
 
         <!-- Edges -->
@@ -85,8 +81,7 @@
               :r="n.radius"
               :fill="n.color"
               :stroke="n.stroke"
-              stroke-width="2"
-              :filter="hover === n ? 'url(#glow)' : ''"
+              :stroke-width="hover === n ? 4 : 2"
             />
             <text
               v-if="n.label.length <= 12"
@@ -205,101 +200,92 @@ const statusTextFor = (mastery) => {
   return '未接触';
 };
 
-// ───── 力导向布局（手写 d3-force 简化版） ─────
-function forceLayout(nodesArr, edgesArr, iterations = 200) {
+// ───── 布局算法：简易分层（拓扑分层 + 同层圆环分布） ─────
+// 比力模拟更稳定，对节点数 ≤ 30 足够好看
+function forceLayout(nodesArr, edgesArr) {
+  if (!nodesArr.length) return;
   const cx = width / 2;
   const cy = height / 2;
-  const repulsion = 6000;   // 排斥力强度
-  const linkDist = 130;     // 理想连边距离
-  const linkStrength = 0.05;
-  const centerStrength = 0.02;
 
-  // 随机初始位置
-  nodesArr.forEach((n, i) => {
-    if (typeof n.x !== 'number') {
-      n.x = cx + Math.cos(i * 0.5) * 150 + (Math.random() - 0.5) * 80;
-      n.y = cy + Math.sin(i * 0.5) * 150 + (Math.random() - 0.5) * 80;
-    }
-    n.vx = 0;
-    n.vy = 0;
+  // 1) 拓扑分层：BFS 计算每个节点的"层数"（依赖深度）
+  const inAdj = new Map();   // 后继
+  const outAdj = new Map();  // 前驱
+  nodesArr.forEach(n => { inAdj.set(n.id, []); outAdj.set(n.id, []); });
+  edgesArr.forEach(e => {
+    if (inAdj.has(e.source)) inAdj.get(e.source).push(e.target);
+    if (outAdj.has(e.target)) outAdj.get(e.target).push(e.source);
   });
 
-  for (let iter = 0; iter < iterations; iter++) {
-    // 排斥力（Coulomb-like）
-    for (let i = 0; i < nodesArr.length; i++) {
-      for (let j = i + 1; j < nodesArr.length; j++) {
-        const a = nodesArr[i];
-        const b = nodesArr[j];
-        let dx = a.x - b.x;
-        let dy = a.y - b.y;
-        let dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 1) {
-          dx = (Math.random() - 0.5) * 0.1;
-          dy = (Math.random() - 0.5) * 0.1;
-          dist = 0.1;
-        }
-        const force = repulsion / (dist * dist);
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        a.vx += fx;
-        a.vy += fy;
-        b.vx -= fx;
-        b.vy -= fy;
+  const layer = new Map();
+  const queue = [];
+  // 无前驱的节点放在第 0 层
+  nodesArr.forEach(n => {
+    if (outAdj.get(n.id).length === 0) {
+      layer.set(n.id, 0);
+      queue.push(n.id);
+    }
+  });
+  // 其他节点的层 = max(所有前驱层) + 1
+  while (queue.length) {
+    const u = queue.shift();
+    const lu = layer.get(u);
+    for (const v of inAdj.get(u)) {
+      const lv = layer.get(v);
+      if (lv === undefined || lv < lu + 1) {
+        layer.set(v, lu + 1);
+        queue.push(v);
       }
     }
+  }
+  // 还有节点没设层（说明有环），fallback 0
+  nodesArr.forEach(n => { if (!layer.has(n.id)) layer.set(n.id, 0); });
 
-    // 弹簧力（连边）
-    const nodeMap = new Map(nodesArr.map(n => [n.id, n]));
-    for (const e of edgesArr) {
-      const a = nodeMap.get(e.source);
-      const b = nodeMap.get(e.target);
-      if (!a || !b) continue;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const diff = dist - linkDist;
-      const force = diff * linkStrength;
-      const fx = (dx / dist) * force;
-      const fy = (dy / dist) * force;
-      a.vx += fx;
-      a.vy += fy;
-      b.vx -= fx;
-      b.vy -= fy;
-    }
+  // 2) 按层分组
+  const byLayer = new Map();
+  nodesArr.forEach(n => {
+    const l = layer.get(n.id);
+    if (!byLayer.has(l)) byLayer.set(l, []);
+    byLayer.get(l).push(n);
+  });
 
-    // 向心力
-    for (const n of nodesArr) {
-      n.vx += (cx - n.x) * centerStrength;
-      n.vy += (cy - n.y) * centerStrength;
-    }
+  // 3) 布局：每层一个圆环
+  const maxLayer = Math.max(...layer.values());
+  const layerCount = maxLayer + 1;
+  const layerR = layerCount > 1
+    ? Math.min(width, height) * 0.4 / layerCount
+    : 0;
 
-    // 应用速度 + 阻尼
-    const damping = 0.75;
-    for (const n of nodesArr) {
-      n.vx *= damping;
-      n.vy *= damping;
-      n.x += n.vx;
-      n.y += n.vy;
-      // 边界
-      n.x = Math.max(40, Math.min(width - 40, n.x));
-      n.y = Math.max(40, Math.min(height - 40, n.y));
+  const positions = new Map();  // id -> {x, y}
+  for (const [l, list] of byLayer) {
+    const n = list.length;
+    if (layerCount === 1) {
+      // 单层：圆形分布
+      list.forEach((node, i) => {
+        const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+        const r = Math.min(width, height) * 0.35;
+        positions.set(node.id, {
+          x: cx + r * Math.cos(angle),
+          y: cy + r * Math.sin(angle),
+        });
+      });
+    } else {
+      const r = (l + 0.5) * layerR * 1.6;
+      list.forEach((node, i) => {
+        const angle = (i / n) * 2 * Math.PI - Math.PI / 2 + l * 0.3;
+        positions.set(node.id, {
+          x: cx + r * Math.cos(angle),
+          y: cy + r * Math.sin(angle),
+        });
+      });
     }
   }
 
-  // 计算半径（按 mastery 大小）
   nodesArr.forEach(n => {
+    const p = positions.get(n.id);
+    n.x = p.x;
+    n.y = p.y;
     n.radius = 18 + n.mastery * 16;
   });
-
-  // 渲染边
-  renderEdges.value = edgesArr.map(e => {
-    const a = nodeMap.get(e.source);
-    const b = nodeMap.get(e.target);
-    if (!a || !b) return null;
-    return {
-      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
-    };
-  }).filter(Boolean);
 }
 
 // 拖拽支持
@@ -336,11 +322,26 @@ function svgPoint(e) {
 // 渲染节点（带颜色 / 状态）
 function refreshRender() {
   renderNodes.value = nodes.value.map(n => ({
-    ...n,
+    id: n.id,
+    label: n.label,
+    mastery: n.mastery,
+    x: n.x,
+    y: n.y,
+    radius: n.radius || (18 + n.mastery * 16),
     color: colorFor(n.mastery),
     stroke: strokeFor(n.mastery),
     statusText: statusTextFor(n.mastery),
   }));
+  renderEdges.value = edges.value.map(e => {
+    const a = nodes.value.find(n => n.id === e.source);
+    const b = nodes.value.find(n => n.id === e.target);
+    if (!a || !b || a.x === undefined || b.x === undefined) return null;
+    return { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+  }).filter(Boolean);
+  console.log('[KG] renderNodes:', renderNodes.value.length, 'renderEdges:', renderEdges.value.length);
+  if (renderNodes.value.length) {
+    console.log('[KG] sample node:', renderNodes.value[0]);
+  }
 }
 
 function resetZoom() {
@@ -366,13 +367,14 @@ async function loadGraph() {
       await learningStore.fetchProfile();
     }
     const res = await api.get('/knowledge-graph');
+    console.log('[KG] api response:', res.data);
     subject.value = res.data.subject;
-    // 浅拷贝避免被 forceLayout 改引用
     nodes.value = (res.data.nodes || []).map(n => ({ ...n }));
     edges.value = res.data.edges || [];
     await nextTick();
     forceLayout(nodes.value, edges.value);
     refreshRender();
+    console.log('[KG] after layout, renderNodes:', renderNodes.value.length);
   } catch (err) {
     console.error('Failed to load knowledge graph', err);
   } finally {
@@ -486,10 +488,15 @@ onMounted(loadGraph);
 
 .node {
   cursor: pointer;
-  transition: transform 0.15s;
 }
-.node:hover {
-  transform: translate(var(--tx, 0), var(--ty, 0)) scale(1.08);
+/* 不要用 transform 放大，会覆盖 SVG transform="translate(x,y)" 导致节点抽搐。
+   这里用更明显的 stroke 加粗 + 加大圆半径 + 文字加粗代替视觉反馈。 */
+.node:hover circle {
+  stroke-width: 4;
+  stroke-dasharray: 4 2;
+}
+.node:hover text {
+  font-weight: 800;
 }
 
 .legend {
