@@ -178,13 +178,14 @@ function resetState() {
 
 async function generateQuestion() {
   try {
+    // api.js 的 interceptor 已把 response.data 解包，所以 res 直接是后端的包装对象
     const res = await api.get(`/assessment/quiz?topic=${encodeURIComponent(props.topic)}`);
-    if (!res.data.success) {
-      alert(res.data.message || '抽题失败');
+    if (!res.success || !res.data) {
+      alert(res.message || '抽题失败');
       closeModal();
       return;
     }
-    question.value = res.data.data;
+    question.value = res.data;
     difficulty.value = question.value.difficulty;
 
     // 初始化答案结构
@@ -199,7 +200,7 @@ async function generateQuestion() {
     state.value = 'answering';
   } catch (err) {
     console.error('Failed to fetch quiz', err);
-    alert('出题失败：' + (err?.response?.data?.message || err.message));
+    alert('出题失败：' + (err?.message || '网络异常'));
     closeModal();
   }
 }
@@ -226,16 +227,16 @@ async function submitAnswer() {
       duration: 60,
     };
     const res = await api.post('/assessment/submit', payload);
-    if (!res.data.success) {
-      alert(res.data.message || '判分失败');
+    if (!res.success || !res.data) {
+      alert(res.message || '判分失败');
       state.value = 'answering';
       return;
     }
-    gradeResult.value = res.data.data;
+    gradeResult.value = res.data;
     state.value = 'result';
   } catch (err) {
     console.error('Failed to submit', err);
-    alert('判分失败：' + (err?.response?.data?.message || err.message));
+    alert('判分失败：' + (err?.message || '网络异常'));
     state.value = 'answering';
   }
 }
