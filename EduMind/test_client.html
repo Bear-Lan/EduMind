@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduMind AI 学习教练</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Include Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg: #0c0e1d; --panel: rgba(18,22,46,0.85); --border: rgba(255,255,255,0.07);
+            --accent: #6366f1; --accent-dim: rgba(99,102,241,0.12); --accent-glow: rgba(99,102,241,0.28);
+            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --text: #f1f2f6; --muted: #8a95b0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Noto Sans SC','Outfit',sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Header */
+        header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: rgba(8,10,22,0.7); backdrop-filter: blur(14px); flex-shrink: 0; }
+        .logo { font-size: 20px; font-weight: 800; background: linear-gradient(to right,#818cf8,#c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .header-right { display: flex; gap: 8px; align-items: center; }
+        .badge { background: var(--accent-dim); border: 1px solid rgba(99,102,241,.3); color: #a5b4fc; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+        /* Buttons */
+        .btn { background: var(--accent); color: white; border: none; padding: 8px 16px; border-radius: 7px; font-weight: 600; cursor: pointer; font-size: 13px; transition: all .22s; display: inline-flex; align-items: center; gap: 5px; font-family: inherit; }
+        .btn:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 4px 14px var(--accent-glow); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
+        .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 6px; }
+        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+        .btn-ghost:hover { background: rgba(255,255,255,.04); color: var(--text); box-shadow: none; }
+        .btn-green { background: var(--success); }
+        .btn-red { background: var(--danger); }
+
+        /* Overlay / Modal */
+        .overlay { position: fixed; inset: 0; background: rgba(4,5,14,.9); backdrop-filter: blur(22px); z-index: 300; display: flex; align-items: center; justify-content: center; transition: opacity .25s; }
+        .overlay.hidden { display: none; }
+        .modal { background: #10152e; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; width: 440px; padding: 34px; box-shadow: 0 28px 60px rgba(0,0,0,.5); }
+        .modal-wide { width: 500px; }
+        .modal-h { font-size: 21px; font-weight: 800; text-align: center; margin-bottom: 4px; }
+        .modal-sub { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 26px; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .tab { flex: 1; text-align: center; padding: 9px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; transition: all .2s; border-bottom: 2px solid transparent; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .fg { margin-bottom: 14px; }
+        .fl { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 5px; letter-spacing: .4px; text-transform: uppercase; }
+        .fi { width: 100%; background: rgba(6,8,20,.8); border: 1px solid var(--border); color: var(--text); padding: 10px 13px; border-radius: 7px; outline: none; font-size: 14px; transition: border .2s,box-shadow .2s; font-family: inherit; }
+        .fi:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+        .fhint { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+        .btn-full { width: 100%; padding: 12px; justify-content: center; font-size: 14px; margin-top: 6px; }
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* Settings sections */
+        .sec-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0 0 10px; }
+        .sec { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .sec:last-child { border-bottom: none; margin-bottom: 0; }
+        .status-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+        .chip.ok { background: rgba(16,185,129,.12); color: var(--success); }
+        .chip.warn { background: rgba(245,158,11,.12); color: var(--warning); }
+        .chip.err { background: rgba(239,68,68,.12); color: var(--danger); }
+
+        /* Main layout */
+        main { display: flex; gap: 14px; padding: 14px 18px; flex: 1; overflow: hidden; min-height: 0; }
+        .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 13px; backdrop-filter: blur(18px); display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+        .panel-left { width: 268px; flex-shrink: 0; resize: horizontal; min-width: 150px; max-width: 50%; }
+        .panel-center { flex: 1; min-width: 300px; }
+        .panel-right { width: 350px; flex-shrink: 0; resize: horizontal; min-width: 200px; max-width: 50%; direction: rtl; }
+        .panel-right > * { direction: ltr; }
+        .ph { padding: 13px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .pt { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+        .pb { padding: 14px 16px; flex: 1; overflow-y: auto; min-height: 0; }
+
+        /* Profile panel */
+        .goal-box { background: var(--accent-dim); border: 1px solid rgba(99,102,241,.22); border-radius: 9px; padding: 12px 14px; margin-bottom: 14px; }
+        .goal-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: #818cf8; font-weight: 700; margin-bottom: 4px; }
+        .goal-val { font-size: 13px; font-weight: 600; line-height: 1.4; }
+        .mastery-item { margin-bottom: 12px; }
+        .mastery-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+        .mbar { background: rgba(255,255,255,.05); height: 5px; border-radius: 3px; overflow: hidden; }
+        .mfill { height: 100%; border-radius: 3px; background: linear-gradient(90deg,var(--accent),#a78bfa); width: 0; transition: width .9s cubic-bezier(.4,0,.2,1); }
+        .sec-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+
+        /* Carousel & Plan panel */
+        .ai-guide { background: rgba(167,139,250,.05); border: 1px solid rgba(167,139,250,.1); border-radius: 12px; padding: 20px; margin-bottom: 18px; color: #e2e8f0; }
+        .ai-guide-title { font-weight: 800; color: #ddd6fe; font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid rgba(167,139,250,.2); padding-bottom: 10px; }
+        
+        .carousel-wrap { position: relative; overflow: hidden; margin-bottom: 18px; border-radius: 12px; background: rgba(167,139,250,.05); border: 1px solid rgba(167,139,250,.1); padding: 18px 24px 40px; }
+        .carousel-inner { display: flex; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: 100%; align-items: flex-start; }
+        .carousel-slide { flex: 0 0 100%; width: 100%; padding: 0 14px; opacity: 0; transition: opacity 0.3s; visibility: hidden; height: 0; overflow: hidden; }
+        .carousel-slide.active-slide { opacity: 1; visibility: visible; height: auto; overflow: visible; }
+        .c-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: var(--panel); border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; opacity: 0.8; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .c-nav-btn:hover { opacity: 1; background: var(--accent); border-color: var(--accent); }
+        .c-nav-btn:disabled { opacity: 0; pointer-events: none; }
+        .c-prev { left: 8px; }
+        .c-next { right: 8px; }
+        .c-dots { position: absolute; bottom: 14px; left: 0; right: 0; display: flex; justify-content: center; gap: 7px; }
+        .c-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.15); cursor: pointer; transition: all 0.3s; }
+        .c-dot.active { background: var(--accent); transform: scale(1.3); }
+
+        /* Softer Markdown Styles */
+        .md-content { font-size: 13.5px; line-height: 1.75; color: #e2e8f0; }
+        .md-content h1, .md-content h2, .md-content h3 { color: #e2e8f0; margin-top: 1em; margin-bottom: 0.6em; font-weight: 700; }
+        .md-content h1 { font-size: 1.3em; }
+        .md-content h2 { font-size: 1.15em; color: #a5b4fc; border-bottom: 1px solid rgba(165,180,252,0.15); padding-bottom: 4px; } 
+        .md-content h3 { font-size: 1.05em; color: #93c5fd; }
+        .md-content p { margin-bottom: 1em; }
+        .md-content ul, .md-content ol { margin-left: 20px; margin-bottom: 1em; }
+        .md-content li { margin-bottom: 6px; }
+        .md-content strong { color: #f8fafc; font-weight: 700; background: rgba(255,255,255,0.08); padding: 0 4px; border-radius: 4px; }
+        .md-content code { background: rgba(16,185,129,0.1); color: #34d399; padding: 2px 5px; border-radius: 4px; font-family: 'Outfit', monospace; font-size: 0.9em; font-weight: 600; }
+        .md-content pre { background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; overflow-x: auto; margin-bottom: 1em; border: 1px solid rgba(255,255,255,0.05); }
+        .md-content pre code { background: transparent; padding: 0; color: #e5e7eb; font-weight: normal; }
+        .md-content blockquote { border-left: 3px solid #818cf8; margin: 0 0 1em 0; padding: 2px 12px; background: transparent; color: #cbd5e1; }
+        
+        .topic-title { font-size: 15px; font-weight: 800; color: #a78bfa; margin-bottom: 14px; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
+        .scard { background: rgba(255,255,255,.02); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; transition: all .3s; cursor: pointer; }
+        .scard:hover { border-color: var(--accent); background: rgba(255,255,255,.05); transform: translateX(4px); }
+        .scard.done { border-color: rgba(16,185,129,.28); background: rgba(16,185,129,.03); }
+        .scard.active-step { border-left: 4px solid var(--accent); background: rgba(99,102,241,.06); }
+        .snum { font-size: 28px; font-weight: 800; color: rgba(255,255,255,.04); float: right; margin-top: -4px; }
+        .stitle { font-size: 13px; font-weight: 600; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
+        .dot.ok { background: var(--success); }
+        .sdesc { font-size: 11px; color: var(--muted); margin-bottom: 11px; line-height: 1.6; }
+        .sfoot { display: flex; justify-content: space-between; align-items: center; }
+        .slabel { font-size: 11px; color: var(--muted); }
+
+        /* Empty / loading */
+        .empty { text-align: center; color: var(--muted); font-size: 13px; padding: 50px 16px; line-height: 1.7; }
+        .empty strong { color: var(--text); }
+        .spin { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .65s linear infinite; vertical-align: middle; margin-right: 6px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Chat panel */
+        .cwrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+        .cmsgs { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+        .bubble { max-width: 90%; padding: 11px 14px; border-radius: 13px; font-size: 12px; line-height: 1.65; }
+        .bubble.user { background: var(--accent); align-self: flex-end; border-bottom-right-radius: 3px; }
+        .bubble.coach { background: rgba(255,255,255,.05); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 3px; }
+        .refs { margin-top: 7px; padding-top: 7px; border-top: 1px dashed rgba(255,255,255,.09); font-size: 10px; color: var(--muted); }
+        .rchip { display: inline-block; background: rgba(255,255,255,.07); padding: 2px 6px; border-radius: 3px; margin: 2px; }
+        .cform { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; align-items: flex-end; }
+        .cinput { flex: 1; background: rgba(6,8,20,.9); border: 1px solid var(--border); color: var(--text); padding: 9px 14px; border-radius: 18px; outline: none; font-size: 12px; font-family: inherit; resize: none; overflow-y: auto; min-height: 38px; max-height: 150px; line-height: 20px; box-sizing: border-box; }
+        .cinput:focus { border-color: var(--accent); }
+        .sbtn { width: 38px; height: 38px; border-radius: 50%; padding: 0; justify-content: center; font-size: 15px; flex-shrink: 0; margin-bottom: 0px; }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 20px; right: 20px; z-index: 999; background: #1a2040; border: 1px solid var(--border); padding: 11px 16px; border-radius: 9px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4); transition: opacity .3s,transform .3s; display: flex; align-items: center; gap: 7px; max-width: 300px; }
+        .toast.hidden { opacity: 0; pointer-events: none; transform: translateY(8px); }
+        .toast.ok { border-left: 3px solid var(--success); }
+        .toast.err { border-left: 3px solid var(--danger); }
+    </style>
+</head>
+<body>
+
+<!-- 登录/注册弹窗 -->
+<div id="authOverlay" class="overlay">
+    <div class="modal">
+        <div class="modal-h">EduMind AI 教练</div>
+        <div class="modal-sub">个性化自适应学习系统</div>
+        <div class="tabs">
+            <div id="tLogin" class="tab active" onclick="switchTab('login')">登录</div>
+            <div id="tReg" class="tab" onclick="switchTab('reg')">注册新账号</div>
+        </div>
+        <form onsubmit="handleAuth(event)">
+            <div class="fg"><label class="fl">用户名</label><input id="aUser" class="fi" required placeholder="输入账号（支持中文）"></div>
+            <div class="fg"><label class="fl">密码</label><input id="aPass" class="fi" type="password" required placeholder="至少 6 位密码"></div>
+            <div id="regExtra" style="display:none">
+                <div class="fg"><label class="fl">姓名（选填）</label><input id="rName" class="fi" placeholder="小明"></div>
+                <div class="grid2">
+                    <div class="fg"><label class="fl">年级</label><input id="rGrade" class="fi" placeholder="初一"></div>
+                    <div class="fg"><label class="fl">学科</label><input id="rSubject" class="fi" placeholder="数学"></div>
+                </div>
+                <div class="fg"><label class="fl">目标分数</label><input id="rScore" class="fi" type="number" placeholder="99" min="0" max="150"></div>
+            </div>
+            <button id="aBtn" type="submit" class="btn btn-full">立即登录</button>
+        </form>
+    </div>
+</div>
+
+<!-- 配置弹窗 -->
+<div id="cfgOverlay" class="overlay hidden">
+    <div class="modal modal-wide">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
+            <div style="font-size:18px;font-weight:800">⚙️ 系统配置</div>
+            <button class="btn btn-ghost btn-sm" onclick="closeCfg()">关闭</button>
+        </div>
+
+        <div class="sec">
+            <div class="sec-title">大模型 API</div>
+            <div class="fg">
+                <label class="fl">DeepSeek API 密钥</label>
+                <input id="cKey" class="fi" type="password" placeholder="sk-xxxxxxxx（填入后使用真实 AI）">
+                <div class="fhint">获取地址：<a href="https://platform.deepseek.com" target="_blank" style="color:#818cf8">platform.deepseek.com</a> · 不填则使用模拟回复</div>
+            </div>
+            <div class="fg">
+                <label class="fl">API 地址</label>
+                <input id="cUrl" class="fi" placeholder="https://api.deepseek.com/v1">
+            </div>
+            <div class="fg">
+                <label class="fl">模型名称</label>
+                <input id="cModel" class="fi" placeholder="deepseek-chat">
+            </div>
+        </div>
+
+        <div class="sec">
+            <div class="sec-title">当前状态</div>
+            <div id="statusChips" class="status-chips"></div>
+        </div>
+
+        <button class="btn btn-full btn-green" onclick="saveCfg()">💾 保存并刷新学习计划</button>
+    </div>
+</div>
+
+<!-- 提示条 -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- 顶部导航 -->
+<header>
+    <div class="logo">EduMind</div>
+    <div class="header-right">
+        <span id="uBadge" class="badge">未登录</span>
+        <button class="btn btn-ghost btn-sm" onclick="openCfg()">⚙️ 配置</button>
+        <button class="btn btn-ghost btn-sm" onclick="doLogout()">退出</button>
+    </div>
+</header>
+
+<!-- 主界面 -->
+<main>
+    <!-- 左：学习画像 -->
+    <div class="panel panel-left">
+        <div class="ph"><div class="pt">📊 学习画像</div></div>
+        <div class="pb">
+            <div id="subjectLoading" style="display:none; text-align: center; font-size: 11px; color: var(--warning); margin-bottom: 12px; background: rgba(245,158,11,0.1); padding: 8px; border-radius: 6px;">
+                <span class="spin"></span> <b>正在规划课程大纲...</b><br>AI 正在分析该学科知识体系，请稍候约10-15秒。
+            </div>
+            <div class="subject-select-wrapper" style="margin-bottom: 12px; display: flex; gap: 6px;">
+                <select id="subjectSelect" class="fi" style="font-weight: 700; color: #a5b4fc; cursor: pointer;" onchange="handleSubjectChange()">
+                    <option value="" disabled>加载学科中...</option>
+                </select>
+                <button class="btn btn-sm btn-ghost" title="新增学科或课本" onclick="showSubjectInput()">➕</button>
+            </div>
+            <div id="subjectInputWrapper" style="display: none; margin-bottom: 12px; flex-direction: column; gap: 8px;">
+                <input id="newSubjectInput" class="fi" placeholder="如：八年级物理、少儿编程">
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-sm btn-green" style="flex:1" onclick="submitNewSubject()">确定</button>
+                    <button class="btn btn-sm btn-ghost" style="flex:1" onclick="hideSubjectInput()">取消</button>
+                </div>
+            </div>
+            <div class="goal-box">
+                <div class="goal-tag">当前学习目标</div>
+                <div id="pGoal" class="goal-val">加载中…</div>
+            </div>
+            <div class="sec-label">各章节掌握度</div>
+            <div id="masteryList"></div>
+        </div>
+    </div>
+
+    <!-- 中：学习计划 -->
+    <div class="panel panel-center">
+        <div class="ph">
+            <div class="pt">🎯 学习计划</div>
+            <button id="regenBtn" class="btn btn-sm" onclick="doRegen()">🔄 重新推荐</button>
+        </div>
+        <div class="pb" id="planBody">
+            <div class="empty">
+                <div style="font-size:32px;margin-bottom:12px">📚</div>
+                <strong>还没有学习计划</strong><br><br>
+                点击右上角 <strong>"🔄 重新推荐"</strong> 按钮<br>系统将根据您的基础自动为您安排第一个学习任务
+            </div>
+        </div>
+    </div>
+
+    <!-- 右：AI 教练聊天 -->
+    <div class="panel panel-right">
+        <div class="ph"><div class="pt">💬 AI 教练答疑</div></div>
+        <div class="cwrap">
+            <div class="cmsgs" id="cmsgs">
+                <div class="bubble coach">
+                    你好！我是 EduMind AI 学习教练 👋<br><br>
+                    你可以向我提问任何数学问题，我会用启发式方式一步一步引导你思考，不会直接给出答案。<br><br>
+                    如果还没有配置 API 密钥，可以点击右上角 <strong>⚙️ 配置</strong> 填入。
+                </div>
+            </div>
+            <form class="cform" onsubmit="doChat(event)">
+                <textarea id="cinput" class="cinput" placeholder="向教练提问... (Shift+Enter换行)" required></textarea>
+                <button type="submit" class="btn sbtn">➔</button>
+            </form>
+        </div>
+    </div>
+</main>
+
+<script>
+const API = 'http://127.0.0.1:8000/api/v1';
+let token = localStorage.getItem('em_token') || '';
+let authMode = 'login';
+let cfg = JSON.parse(localStorage.getItem('em_cfg') || '{"apiKey":"","baseUrl":"https://api.deepseek.com/v1","model":"deepseek-chat"}');
+
+let TOPIC_ZH = {};
+let TOPICS_LIST = [];
+
+// ===== 初始化 =====
+window.addEventListener('DOMContentLoaded', () => {
+    if (token) {
+        hideAuth();
+        initApp();
+    }
+    
+    // Auto-resize chat input and handle Enter to submit
+    const cinput = document.getElementById('cinput');
+    if(cinput) {
+        cinput.addEventListener('input', function() {
+            this.style.height = '38px'; // reset to min-height to recalculate
+            this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+        });
+        cinput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                doChat(e);
+            }
+        });
+    }
+});
+
+async function initApp() {
+    await loadProfile();
+    // 自动加载计划，若无计划自动生成
+    await loadOrGenPlan();
+    await loadHistory();
+}
+
+// ===== 认证 =====
+function switchTab(t) {
+    authMode = t;
+    document.getElementById('tLogin').classList.toggle('active', t === 'login');
+    document.getElementById('tReg').classList.toggle('active', t === 'reg');
+    document.getElementById('regExtra').style.display = t === 'reg' ? 'block' : 'none';
+    document.getElementById('aBtn').textContent = t === 'login' ? '立即登录' : '创建账号并登录';
+}
+
+async function handleAuth(e) {
+    e.preventDefault();
+    const btn = document.getElementById('aBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>处理中…';
+    try {
+        const user = document.getElementById('aUser').value.trim();
+        const pass = document.getElementById('aPass').value;
+        let url, body;
+        if (authMode === 'login') {
+            url = '/auth/login';
+            body = { username: user, password: pass };
+        } else {
+            url = '/auth/register';
+            body = {
+                username: user, password: pass,
+                name: document.getElementById('rName').value || user,
+                grade: document.getElementById('rGrade').value || '初一',
+                subject: document.getElementById('rSubject').value || '数学',
+                target_score: parseFloat(document.getElementById('rScore').value) || 90,
+            };
+        }
+        const r = await fetch(API + url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.message || '操作失败');
+        token = d.data.access_token;
+        localStorage.setItem('em_token', token);
+        hideAuth();
+        initApp();
+        toast('登录成功，欢迎使用 EduMind！', 'ok');
+    } catch(err) {
+        toast('失败：' + err.message, 'err');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = authMode === 'login' ? '立即登录' : '创建账号并登录';
+    }
+}
+function hideAuth() { document.getElementById('authOverlay').classList.add('hidden'); }
+function doLogout() { localStorage.removeItem('em_token'); token = ''; location.reload(); }
+
+// ===== 配置面板 =====
+function openCfg() {
+    document.getElementById('cKey').value = cfg.apiKey || '';
+    document.getElementById('cUrl').value = cfg.baseUrl || 'https://api.deepseek.com/v1';
+    document.getElementById('cModel').value = cfg.model || 'deepseek-chat';
+    document.getElementById('cfgOverlay').classList.remove('hidden');
+    loadStatus();
+}
+function closeCfg() { document.getElementById('cfgOverlay').classList.add('hidden'); }
+function saveCfg() {
+    const prevKey = cfg.apiKey || '';
+    cfg.apiKey = document.getElementById('cKey').value.trim();
+    cfg.baseUrl = document.getElementById('cUrl').value.trim() || 'https://api.deepseek.com/v1';
+    cfg.model = document.getElementById('cModel').value.trim() || 'deepseek-chat';
+    localStorage.setItem('em_cfg', JSON.stringify(cfg));
+    closeCfg();
+    toast('配置已保存，正在重新生成学习计划…', 'ok');
+    // 无论 key 是否变化，都强制重新生成（清除旧 Mock 内容）
+    setTimeout(() => doRegen(), 600);
+}
+async function loadStatus() {
+    const el = document.getElementById('statusChips');
+    el.innerHTML = '<span class="chip warn"><span class="spin"></span>检测中…</span>';
+    try {
+        const r = await fetch(`${API}/health`, { headers: getHeaders() });
+        const d = await r.json();
+        const s = d.data || {};
+        el.innerHTML = `
+            <span class="chip ${s.database==='ok'?'ok':'err'}">💾 数据库 ${s.database==='ok'?'正常':'异常'}</span>
+            <span class="chip ${s.vector_db==='ok'?'ok':'err'}">🔍 向量库 ${s.vector_db==='ok'?'正常':'异常'}</span>
+            <span class="chip ${cfg.apiKey?'ok':'warn'}">🤖 AI ${cfg.apiKey?'已配置真实密钥':'模拟模式（未配置）'}</span>
+        `;
+    } catch {
+        el.innerHTML = `<span class="chip err">⚠️ 无法连接后端</span>`;
+    }
+}
+
+// ===== 请求头 & 错误处理 =====
+const getHeaders = () => {
+    const h = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+    if (cfg.apiKey) h['X-API-Key'] = cfg.apiKey;
+    return h;
+};
+
+function checkAuthError(r, d) {
+    if (r.status === 401) {
+        alert('安全提示：您的登录已过期（为保护账号安全，一小时自动退出），请重新登录。');
+        doLogout();
+        throw new Error('登录过期');
+    }
+    if (!r.ok) throw new Error((d && d.message) ? d.message : '请求失败');
+}
+
+// ===== 画像 =====
+async function loadProfile() {
+    try {
+        const r = await fetch(`${API}/profile`, { headers: getHeaders() });
+        const d = await r.json();
+        checkAuthError(r, d);
+        const p = d.data;
+        document.getElementById('uBadge').textContent = `学生 #${p.student_id}`;
+        document.getElementById('pGoal').textContent = p.current_goal || '暂无目标';
+        
+        // Dynamically build TOPICS_LIST
+        const prefs = p.learning_preferences || {};
+        const curricula = prefs.curricula || {};
+        const currentSubj = p.subject || '数学';
+        
+        // Update subject selector
+        const sel = document.getElementById('subjectSelect');
+        const knownSubjects = Object.keys(curricula);
+        if(!knownSubjects.includes(currentSubj)) knownSubjects.push(currentSubj);
+        
+        sel.innerHTML = '';
+        knownSubjects.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            if(s === currentSubj) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        
+        if (curricula[currentSubj]) {
+            const curriculum = curricula[currentSubj];
+            TOPIC_ZH = curriculum.__zh_names__ || {};
+            TOPICS_LIST = [];
+            Object.keys(curriculum).forEach(en => {
+                if(en !== '__zh_names__') {
+                    TOPICS_LIST.push([en, TOPIC_ZH[en] || en]);
+                }
+            });
+        }
+
+        const mm = p.mastery_map || {};
+        const el = document.getElementById('masteryList');
+        el.innerHTML = '';
+        
+        if(TOPICS_LIST.length === 0) {
+            el.innerHTML = '<div style="font-size:11px; color:var(--muted); text-align:center; margin-top: 10px;">暂无该学科课程大纲，系统正在生成或请重新选择。</div>';
+        }
+        
+        TOPICS_LIST.forEach(([en, zh]) => {
+            const v = Math.min(100, Math.round((mm[en] || 0) * 100));
+            const c = v >= 80 ? 'var(--success)' : (v > 0 ? '#f59e0b' : 'var(--muted)');
+            const isCurrent = window.currentTopic === en;
+            el.innerHTML += `
+                <div class="mastery-item" style="cursor:pointer; transition: all 0.2s;" onclick="doRegen('${en}')" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                    <div class="mastery-row">
+                        <span style="font-size:11px; ${isCurrent ? 'color:var(--accent);font-weight:bold;' : ''}">${zh}</span>
+                        <span style="font-weight:700;color:${c};font-size:11px">${v}%</span>
+                    </div>
+                    <div class="mbar"><div class="mfill" style="width:${v}%;background:${v>=80?'var(--success)':'linear-gradient(90deg,var(--accent),#a78bfa)'}"></div></div>
+                </div>`;
+        });
+    } catch(e) { console.warn('loadProfile:', e); }
+}
+
+// ===== 切换与新增学科 =====
+function showSubjectInput() {
+    document.getElementById('subjectInputWrapper').style.display = 'flex';
+    document.getElementById('newSubjectInput').focus();
+}
+function hideSubjectInput() {
+    document.getElementById('subjectInputWrapper').style.display = 'none';
+    document.getElementById('newSubjectInput').value = '';
+}
+async function submitNewSubject() {
+    const val = document.getElementById('newSubjectInput').value.trim();
+    if(!val) return hideSubjectInput();
+    hideSubjectInput();
+    await changeSubject(val);
+}
+async function handleSubjectChange() {
+    const sel = document.getElementById('subjectSelect');
+    await changeSubject(sel.value);
+}
+async function changeSubject(newSubject) {
+    if(!newSubject) return;
+    
+    // Check if real AI is configured for dynamic generation
+    if(!cfg.apiKey && confirm("当前未配置大模型 API 密钥。如果新增全新学科，系统将只能为您提供一份虚拟测试大纲。要先去配置 API 吗？")) {
+        return openCfg();
+    }
+    
+    document.getElementById('subjectSelect').disabled = true;
+    document.getElementById('subjectLoading').style.display = 'block';
+    
+    // Clear out current plan screen visually
+    document.getElementById('planBody').innerHTML = '<div class="empty"><span class="spin"></span>正在切换学科，可能需要AI实时编制大纲...</div>';
+    
+    try {
+        const r = await fetch(`${API}/profile`, { 
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ subject: newSubject })
+        });
+        const d = await r.json();
+        checkAuthError(r, d);
+        
+        toast(`已成功切换至：${newSubject}`, 'ok');
+        
+        // Reload everything
+        window.currentTopic = null; // reset topic
+        await loadProfile();
+        // Since we changed subject, any active plan on old subject might be irrelevant, 
+        // Or we just force regen to get the new subject plan.
+        await doRegen();
+    } catch(err) {
+        toast('切换学科失败：' + err.message, 'err');
+    } finally {
+        document.getElementById('subjectSelect').disabled = false;
+        document.getElementById('subjectLoading').style.display = 'none';
+    }
+}
+
+// ===== 学习计划 =====
+async function loadOrGenPlan() {
+    const body = document.getElementById('planBody');
+    body.innerHTML = '<div class="empty"><span class="spin"></span>加载学习计划…</div>';
+    document.getElementById('regenBtn').disabled = true;
+    try {
+        const r = await fetch(`${API}/plan/current`, { headers: getHeaders() });
+        const d = await r.json();
+        checkAuthError(r, d);
+        window.currentTopic = d.data.target_topic;
+        renderPlan(d.data, body);
+        await loadProfile(); // Call loadProfile to highlight current topic
+    } catch(e) {
+        body.innerHTML = `<div class="empty" style="color:var(--danger)">⚠️ 加载失败：${esc(e.message)}<br><small>请检查后端是否正在运行</small></div>`;
+    } finally {
+        document.getElementById('regenBtn').disabled = false;
+    }
+}
+
+async function doRegen(topicId = null) {
+    const body = document.getElementById('planBody');
+    const btn = document.getElementById('regenBtn');
+    body.innerHTML = '<div class="empty"><span class="spin"></span>AI 推荐引擎运算中，请稍候…</div>';
+    btn.disabled = true;
+    try {
+        const url = topicId ? `${API}/plan/generate?target_topic=${encodeURIComponent(topicId)}` : `${API}/plan/generate`;
+        const r = await fetch(url, { method:'POST', headers: getHeaders() });
+        const d = await r.json();
+        checkAuthError(r, d);
+        window.currentTopic = d.data.target_topic;
+        renderPlan(d.data, body);
+        await loadProfile();
+        toast('学习计划已更新！', 'ok');
+    } catch(e) {
+        body.innerHTML = `<div class="empty" style="color:var(--danger)">⚠️ 生成失败：${esc(e.message)}</div>`;
+        toast('生成失败：' + e.message, 'err');
+    } finally { btn.disabled = false; }
+}
+
+function renderPlan(plan, body) {
+    body.innerHTML = '';
+    if (!plan || !plan.plan_id) {
+        body.innerHTML = `<div class="empty" style="color:var(--success)">
+            <div style="font-size:40px;margin-bottom:12px">🏆</div>
+            <strong>所有章节均已掌握！</strong><br><br>
+            恭喜你完成了全部数学课程大纲！<br>请继续保持，向更高目标迈进！
+        </div>`;
+        return;
+    }
+
+    // Match slide with the first uncompleted step
+    const steps = plan.learning_steps || [];
+    let targetSlide = steps.findIndex(s => !s.completed);
+    if (targetSlide === -1) targetSlide = 0;
+
+    // AI 教练精讲 (Carousel Logic)
+    if (plan.ai_guide) {
+        // Split by markdown horizontal rule (---)
+        const slidesText = plan.ai_guide.split(/\n\s*[-*_]{3,}\s*\n/);
+        window.totalSlides = slidesText.length;
+        
+        targetSlide = Math.min(targetSlide, window.totalSlides - 1);
+        window.currentSlide = targetSlide;
+
+        if (window.totalSlides > 1) {
+            const wrap = document.createElement('div');
+            wrap.className = 'carousel-wrap';
+            
+            let innerHtml = `<div class="ai-guide-title">💡 知识点精讲闯关</div>
+                             <div class="carousel-inner" id="carouselInner" style="transform: translateX(-${targetSlide * 100}%)">`;
+            let dotsHtml = `<div class="c-dots">`;
+            
+            slidesText.forEach((slide, idx) => {
+                innerHtml += `<div class="carousel-slide ${idx === targetSlide ? 'active-slide' : ''} md-content">
+                                ${marked.parse(slide.trim())}
+                              </div>`;
+                dotsHtml += `<div class="c-dot ${idx === targetSlide ? 'active' : ''}" onclick="window.goToSlide(${idx})"></div>`;
+            });
+            
+            innerHtml += `</div>
+                          <button id="cPrevBtn" class="c-nav-btn c-prev" onclick="window.changeSlide(-1)" ${targetSlide === 0 ? 'disabled' : ''}>❮</button>
+                          <button id="cNextBtn" class="c-nav-btn c-next" onclick="window.changeSlide(1)" ${targetSlide === window.totalSlides - 1 ? 'disabled' : ''}>❯</button>`;
+            
+            wrap.innerHTML = innerHtml + dotsHtml + `</div>`;
+            body.appendChild(wrap);
+        } else {
+            // Fallback for single page
+            const guide = document.createElement('div');
+            guide.className = 'ai-guide';
+            guide.innerHTML = `<div class="ai-guide-title">💡 知识点精讲</div><div class="md-content">${marked.parse(plan.ai_guide)}</div>`;
+            body.appendChild(guide);
+        }
+    }
+
+    // 章节标题
+    const header = document.createElement('div');
+    header.className = 'topic-title';
+    header.textContent = `📌 当前突破章节：${TOPIC_ZH[plan.target_topic] || plan.target_topic}`;
+    body.appendChild(header);
+
+    // 步骤卡片
+    steps.forEach((step, idx) => {
+        const prev = idx === 0 || steps[idx - 1].completed;
+        const card = document.createElement('div');
+        card.className = `scard ${step.completed ? 'done' : ''} ${idx === window.currentSlide ? 'active-step' : ''}`;
+        
+        // Ensure index bounds for slide mapping
+        const slideIdx = Math.min(idx, window.totalSlides - 1 || 0);
+        card.onclick = () => window.goToSlide(slideIdx);
+
+        let action = '';
+        if (step.completed) {
+            action = `<span style="color:var(--success);font-weight:700;font-size:12px">✅ 已完成</span>`;
+        } else if (prev) {
+            action = `<button class="btn btn-sm btn-green" onclick="event.stopPropagation(); doComplete(${plan.plan_id},${step.step_number},this)">标记完成 ✓</button>`;
+        } else {
+            action = `<span style="font-size:11px;color:var(--muted)">🔒 前序步骤未完成</span>`;
+        }
+
+        card.innerHTML = `
+            <div class="snum">0${step.step_number}</div>
+            <div class="stitle"><span class="dot ${step.completed?'ok':''}"></span>${esc(step.title)}</div>
+            <div class="sdesc">${esc(step.description)}</div>
+            <div class="sfoot">
+                <span class="slabel">第 ${step.step_number} / ${steps.length} 步</span>
+                ${action}
+            </div>
+        `;
+        body.appendChild(card);
+    });
+}
+
+async function doComplete(planId, stepNum, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>';
+    // 第3步模拟测试评分（80~100%之间随机）
+    const score = stepNum === 3 ? +(0.8 + Math.random() * 0.2).toFixed(2) : 1.0;
+    try {
+        const r = await fetch(`${API}/learning/complete`, {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ plan_id: planId, step_number: stepNum, score, duration: 300 })
+        });
+        const d = await r.json();
+        checkAuthError(r, d);
+        const pct = Math.round(score * 100);
+        toast(`第 ${stepNum} 步完成！得分 ${pct} 分${stepNum === 3 ? '，系统将重新推荐下一章节' : ''}`, 'ok');
+        await loadOrGenPlan();
+        await loadProfile();
+    } catch(e) {
+        toast('提交失败：' + e.message, 'err');
+        btn.disabled = false;
+        btn.textContent = '标记完成 ✓';
+    }
+}
+
+// ===== 聊天 =====
+async function loadHistory() {
+    try {
+        const r = await fetch(`${API}/chat/history`, { headers: getHeaders() });
+        const d = await r.json();
+        if (r.status === 401) { doLogout(); return; }
+        if (!r.ok || !d.data?.length) return;
+        d.data.forEach(m => addBubble(m.role === 'user' ? 'user' : 'coach', m.content));
+    } catch(e) { /* 忽略历史加载失败 */ }
+}
+
+async function doChat(e) {
+    if(e) e.preventDefault();
+    const input = document.getElementById('cinput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    input.style.height = '38px'; // Reset height
+    addBubble('user', msg);
+    const thinkEl = addBubble('coach', '<span class="spin"></span>教练思考中…');
+    try {
+        const r = await fetch(`${API}/chat`, {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ message: msg })
+        });
+        const d = await r.json();
+        checkAuthError(r, d);
+        thinkEl.remove();
+        addBubble('coach', d.data.response, d.data.references || []);
+    } catch(err) {
+        thinkEl.innerHTML = `⚠️ 发送失败：${esc(err.message)}`;
+    }
+}
+
+function addBubble(role, content, refs = []) {
+    const c = document.getElementById('cmsgs');
+    const b = document.createElement('div');
+    b.className = `bubble ${role} md-content`;
+    
+    if (role === 'coach' && !content.includes('class="spin"')) {
+        b.innerHTML = marked.parse(content);
+    } else {
+        b.innerHTML = content.replace(/\n/g, '<br>');
+    }
+    
+    if (refs.length) {
+        const r = document.createElement('div');
+        r.className = 'refs';
+        r.innerHTML = '📚 参考：' + refs.map(x => `<span class="rchip">${esc(x.title||x)}</span>`).join('');
+        b.appendChild(r);
+    }
+    c.appendChild(b);
+    c.scrollTop = c.scrollHeight;
+    return b;
+}
+
+// ===== 工具 =====
+function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function toast(msg, type='ok') {
+    const el = document.getElementById('toast');
+    el.className = `toast ${type}`;
+    el.textContent = (type==='ok'?'✅ ':'❌ ') + msg;
+    el.classList.remove('hidden');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.add('hidden'), 3800);
+}
+
+// Carousel Navigation
+window.changeSlide = function(delta) {
+    const next = window.currentSlide + delta;
+    if (next >= 0 && next < window.totalSlides) {
+        window.goToSlide(next);
+    }
+};
+
+window.goToSlide = function(idx) {
+    window.currentSlide = idx;
+    const inner = document.getElementById('carouselInner');
+    if(inner) {
+        inner.style.transform = `translateX(-${idx * 100}%)`;
+    }
+    document.querySelectorAll('.carousel-slide').forEach((el, i) => {
+        el.classList.toggle('active-slide', i === idx);
+    });
+    document.querySelectorAll('.c-dot').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+    });
+    document.querySelectorAll('.scard').forEach((el, i) => {
+        el.classList.toggle('active-step', i === idx);
+    });
+    
+    const prevBtn = document.getElementById('cPrevBtn');
+    const nextBtn = document.getElementById('cNextBtn');
+    if(prevBtn) prevBtn.disabled = idx === 0;
+    if(nextBtn) nextBtn.disabled = idx === window.totalSlides - 1;
+};
+</script>
+</body>
+</html>

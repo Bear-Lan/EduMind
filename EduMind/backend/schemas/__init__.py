@@ -1,0 +1,1 @@
+# EduMind Schemas Package

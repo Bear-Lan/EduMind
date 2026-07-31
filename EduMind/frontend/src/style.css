@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Outfit:wght@400;600;800&display=swap');
+
+:root {
+  /* Color Palette - Premium Dark Theme */
+  --bg-primary: #0c0e1d;
+  --bg-panel: rgba(18, 22, 46, 0.65);
+  --bg-panel-solid: #12162e;
+  --border-color: rgba(255, 255, 255, 0.08);
+  
+  --accent-primary: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-dim: rgba(99, 102, 241, 0.12);
+  --accent-glow: rgba(99, 102, 241, 0.28);
+  
+  --text-primary: #f1f2f6;
+  --text-secondary: #8a95b0;
+  
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-danger: #ef4444;
+
+  /* Typography */
+  --font-base: 'Noto Sans SC', 'Outfit', system-ui, sans-serif;
+  
+  /* Metrics */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 28px 60px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 4px 14px var(--accent-glow);
+  
+  /* Transitions */
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-base);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Typography Utilities */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover {
+  color: #818cf8;
+}
+
+/* Glassmorphism Utility */
+.glass-panel {
+  background: var(--bg-panel);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+/* Markdown Content Styling */
+.md-content {
+  font-size: 14px;
+  line-height: 1.75;
+  color: #e2e8f0;
+}
+.md-content h1, .md-content h2, .md-content h3 {
+  color: #e2e8f0;
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  font-weight: 700;
+}
+.md-content h1 { font-size: 1.4em; }
+.md-content h2 { 
+  font-size: 1.25em; 
+  color: #a5b4fc; 
+  border-bottom: 1px solid rgba(165,180,252,0.15); 
+  padding-bottom: 6px; 
+}
+.md-content h3 { font-size: 1.1em; color: #93c5fd; }
+.md-content p { margin-bottom: 1.2em; }
+.md-content ul, .md-content ol { margin-left: 24px; margin-bottom: 1.2em; }
+.md-content li { margin-bottom: 8px; }
+.md-content strong {
+  color: #f8fafc;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.md-content code {
+  background: rgba(16,185,129,0.1);
+  color: #34d399;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Outfit', monospace;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+.md-content pre {
+  background: rgba(0,0,0,0.3);
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin-bottom: 1.2em;
+  border: 1px solid var(--border-color);
+}
+.md-content pre code {
+  background: transparent;
+  padding: 0;
+  color: #e5e7eb;
+  font-weight: normal;
+}
+.md-content blockquote {
+  border-left: 3px solid var(--accent-primary);
+  margin: 0 0 1.2em 0;
+  padding: 4px 16px;
+  background: var(--accent-dim);
+  color: #cbd5e1;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Loading Spinner */
+.spin {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid var(--border-color);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Layout Utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

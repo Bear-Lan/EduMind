@@ -1,0 +1,47 @@
+# 外层根目录 .gitignore（EduMind 项目）
+# EduMind 子项目自身的规则见 EduMind/.gitignore
+
+# Python 临时文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 密钥 / 环境变量（绝对不入库）
+.env
+.env.local
+.env.*.local
+.env.*.swp
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据库
+*.db
+*.sqlite
+
+# 日志
+*.log
+logs/
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 大文件 / 临时
+*.zip
+*.tar.gz
+tmp/
+temp/
