@@ -10,30 +10,44 @@
       
       <!-- Tab Switcher -->
       <div class="tab-switcher">
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'console' }" 
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'console' }"
           @click="activeTab = 'console'"
         >
           🧠 学习主控台
         </button>
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'assessment' }" 
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'assessment' }"
           @click="activeTab = 'assessment'"
         >
           📝 测评中心
         </button>
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'progress' }" 
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'errorbook' }"
+          @click="activeTab = 'errorbook'"
+        >
+          📕 错题本
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'kmap' }"
+          @click="activeTab = 'kmap'"
+        >
+          🕸️ 知识图谱
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'progress' }"
           @click="activeTab = 'progress'"
         >
           📈 学习进度
         </button>
-        <button 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'analytics' }" 
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'analytics' }"
           @click="activeTab = 'analytics'"
         >
           📊 数据分析
@@ -93,6 +107,16 @@
         <AssessmentPage />
       </div>
 
+      <!-- Error Book View -->
+      <div v-else-if="activeTab === 'errorbook'" class="full-tab-container glass-panel">
+        <ErrorBookPage />
+      </div>
+
+      <!-- Knowledge Map View -->
+      <div v-else-if="activeTab === 'kmap'" class="full-tab-container glass-panel">
+        <KnowledgeMapPage />
+      </div>
+
       <!-- Progress View -->
       <div v-else-if="activeTab === 'progress'" class="full-tab-container glass-panel">
         <ProgressPage />
@@ -133,6 +157,8 @@ import ChatPage from './ChatPage.vue';
 import AnalyticsPage from './AnalyticsPage.vue';
 import AssessmentPage from './AssessmentPage.vue';
 import ProgressPage from './ProgressPage.vue';
+import ErrorBookPage from './ErrorBookPage.vue';
+import KnowledgeMapPage from './KnowledgeMapPage.vue';
 import SubjectSwitcher from '../components/SubjectSwitcher.vue';
 
 const router = useRouter();
