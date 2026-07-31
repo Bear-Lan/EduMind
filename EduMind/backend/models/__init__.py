@@ -10,6 +10,7 @@ from models.plan import LearningPlan
 from models.history import LearningHistory
 from models.chat import ChatSession, ChatMessage
 from models.resource import LearningResource
+from models.quiz import QuizQuestion, QuizAttempt
 
 __all__ = [
     "Base",
@@ -20,4 +21,6 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "LearningResource",
+    "QuizQuestion",
+    "QuizAttempt",
 ]
