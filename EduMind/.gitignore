@@ -36,6 +36,10 @@ logs/
 *.db
 *.sqlite
 
+# Qdrant local storage (vector DB binary files)
+data/qdrant_storage/
+data/qdrant_db/
+
 # OS
 .DS_Store
 Thumbs.db

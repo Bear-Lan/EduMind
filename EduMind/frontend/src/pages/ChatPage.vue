@@ -28,10 +28,24 @@
       >
         <div class="bubble md-content" v-html="msg.role === 'coach' ? renderMarkdown(msg.content) : escapeHtml(msg.content)"></div>
         <div v-if="msg.references && msg.references.length" class="refs">
-          📚 参考资料:
-          <span v-for="ref in msg.references" :key="ref.title || ref" class="ref-chip">
-            {{ ref.title || ref }}
-          </span>
+          <div class="refs-header">
+            <span class="refs-icon">📚</span>
+            <span class="refs-title">参考教辅资料（来自 RAG 检索）</span>
+          </div>
+          <div class="ref-list">
+            <div
+              v-for="(ref, i) in msg.references"
+              :key="ref.title || i"
+              class="ref-chip"
+            >
+              <div class="ref-num">{{ i + 1 }}</div>
+              <div class="ref-body">
+                <div class="ref-title">{{ ref.title || '参考资料' }}</div>
+                <div class="ref-source" v-if="ref.source">📖 {{ ref.source }}</div>
+                <div class="ref-source" v-if="ref.topic">🏷 {{ ref.topic }}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -247,17 +261,67 @@ function escapeHtml(text) {
 }
 
 .refs {
-  margin-top: 8px;
-  font-size: 11px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(167,139,250,0.05));
+  border: 1px solid rgba(99,102,241,0.25);
+  border-radius: 10px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
+.refs-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.refs-icon { font-size: 14px; }
+.refs-title { font-size: 12px; }
+.ref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .ref-chip {
-  display: inline-block;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 2px 8px;
-  border-radius: 4px;
-  margin-right: 6px;
-  margin-bottom: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.2s;
+}
+.ref-chip:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+.ref-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ref-body { flex: 1; min-width: 0; }
+.ref-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.ref-source {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 1px;
 }
 
 .quick-actions {

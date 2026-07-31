@@ -19,34 +19,22 @@ class EmbeddingService:
     """Service to generate vector representations of text queries or resources."""
 
     async def get_embedding(self, text: str) -> list[float]:
-        """
-        Generate embedding vector for a given string query.
+        """单条 embedding。"""
+        results = await self.get_embeddings([text])
+        return results[0]
 
-        If embedding_api_key is not configured in settings, falls back to
-        an offline, deterministic L2-normalized pseudo-random generator
-        (so matching strings always produce identical vectors of fixed length).
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        """
+        批量 embedding。返回顺序与输入一致。
+
+        API key 缺失时使用确定性 hash 伪向量（同文本永远同向量）。
         """
         api_key = settings.embedding_api_key
         dimensions = settings.embedding_dimensions
 
         # Offline Mock Fallback
         if not api_key:
-            logger.debug(
-                f"No EMBEDDING_API_KEY set. Generating deterministic mock vector ({dimensions} dims)."
-            )
-            # Create a seed based on the string MD5 hash
-            seed = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
-            rng = random.Random(seed)
-
-            # Generate vector values between -1.0 and 1.0
-            vector = [rng.uniform(-1.0, 1.0) for _ in range(dimensions)]
-
-            # L2 Normalization (make it a unit vector)
-            norm = sum(x**2 for x in vector) ** 0.5
-            if norm > 0:
-                vector = [x / norm for x in vector]
-
-            return vector
+            return [self._mock_vector(t, dimensions) for t in texts]
 
         # Online HTTP Request (OpenAI-compatible)
         url = f"{settings.embedding_base_url.rstrip('/')}/embeddings"
@@ -56,11 +44,11 @@ class EmbeddingService:
         }
         payload = {
             "model": settings.embedding_model,
-            "input": text,
+            "input": texts,
         }
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, headers=headers, json=payload)
                 if response.status_code != 200:
                     logger.error(
@@ -69,16 +57,26 @@ class EmbeddingService:
                     raise ServiceUnavailableError("Embedding Service API")
 
                 result = response.json()
-                embedding = result["data"][0]["embedding"]
-
-                # Ensure dimensions match expected size (truncate or pad if necessary, or just return)
-                return embedding
+                # 按 index 排序，保持与输入顺序一致
+                items = sorted(result["data"], key=lambda x: x.get("index", 0))
+                return [item["embedding"] for item in items]
 
         except Exception as exc:
             if isinstance(exc, ServiceUnavailableError):
                 raise
             logger.error(f"Failed calling embedding API: {exc}", exc_info=True)
             raise ServiceUnavailableError("Embedding Service Connection")
+
+    @staticmethod
+    def _mock_vector(text: str, dimensions: int) -> list[float]:
+        """确定性伪向量（同文本永远同向量）。"""
+        seed = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
+        rng = random.Random(seed)
+        vec = [rng.uniform(-1.0, 1.0) for _ in range(dimensions)]
+        norm = sum(x**2 for x in vec) ** 0.5
+        if norm > 0:
+            vec = [x / norm for x in vec]
+        return vec
 
 
 # Singleton instance

@@ -316,16 +316,43 @@ class LLMService:
                     user_question = msg["content"]
                     break
 
-            mock_text = (
-                f"[Mock AI Coach Response]\n\n"
-                f"你好！我是 EduMind AI 智能学习教练。\n\n"
-                f"关于你的问题，我正在以“离线模式”为你解答。因为系统当前没有配置大模型 API 密钥 (DEEPSEEK_API_KEY)，"
-                f"所以我在模拟我们的对话流。以下是我的启发式分析：\n\n"
-                f"1. **你的关键信息**：我注意到了你发来的内容：\n"
-                f"   > {user_question[:150]}...\n"
-                f"2. **教练建议**：学习是一个循序渐进的过程。请仔细阅读系统为你推荐的学习任务卡片，按照步骤先自学基本概念，再去挑战练习题。如果有困难，随时来找我探讨思路，我会一步步启发你，而不直接抛给你答案。\n\n"
-                f"配好 API 密钥后，这里会呈现来自 DeepSeek 模型的真实教学指导。"
-            )
+            # 智能离线模式：如果 user prompt 里包含教辅片段（CHAT/EXPLAIN 模板嵌入），
+            # 直接抽取片段摘要作为回答，看起来像真在讲解
+            context_block = ""
+            for msg in messages:
+                if msg["role"] == "user" and "未找到相关参考背景教辅资料" not in msg["content"]:
+                    # 解析出 [Document N] 块
+                    import re
+                    docs = re.findall(
+                        r"\[Document \d+\]: Title: ([^\n]+)\nContent: ((?:(?!\[Document).)+)",
+                        msg["content"], re.DOTALL,
+                    )
+                    if docs:
+                        context_block = docs[0][1][:600]
+                        break
+
+            if context_block:
+                mock_text = (
+                    f"你好！我是 EduMind AI 智能学习教练（离线模式）。\n\n"
+                    f"我从教辅知识库里检索到与你问题高度相关的内容，先给你梳理要点：\n\n"
+                    f"> {context_block}\n\n"
+                    f"**教练建议**：\n"
+                    f"1. 先理解上面片段里的关键概念与公式；\n"
+                    f"2. 尝试用片段里的方法独立做 1~2 道基础题；\n"
+                    f"3. 如果哪一步卡住，把你的思路发给我，我用启发式问题引导你，而不是直接给答案。\n\n"
+                    f"---\n💡 配置 DEEPSEEK_API_KEY 后，我会基于以上教辅内容调用大模型给出更连贯、更个性化的讲解。"
+                )
+            else:
+                mock_text = (
+                    f"[Mock AI Coach Response]\n\n"
+                    f"你好！我是 EduMind AI 智能学习教练。\n\n"
+                    f"关于你的问题，我正在以\"离线模式\"为你解答。系统当前没有配置大模型 API 密钥 "
+                    f"(DEEPSEEK_API_KEY)，但我从教辅知识库里暂时没找到匹配的片段。\n\n"
+                    f"**教练建议**：学习是一个循序渐进的过程。请仔细阅读系统为你推荐的学习任务卡片，"
+                    f"按照步骤先自学基本概念，再去挑战练习题。如果有困难，随时来找我探讨思路，"
+                    f"我会一步步启发你，而不是直接抛给你答案。\n\n"
+                    f"配置 API 密钥后，这里会呈现来自 DeepSeek 模型的真实教学指导。"
+                )
             return mock_text
 
         # Online HTTP Call (OpenAI-compatible)
