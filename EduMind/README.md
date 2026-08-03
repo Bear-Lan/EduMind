@@ -1,4 +1,4 @@
-# EduMind V1.0 — AI 驱动的自适应个性化协同学习平台
+﻿# EduMind V1.0 — AI 驱动的自适应个性化协同学习平台
 
 > **版本号**：V1.0 (Release)  
 > **使用对象**：测试人员 / 同学 / 开发者  
@@ -22,8 +22,9 @@
 ## 🚀 2. 快速上手与操作指南
 
 ### 2.1 环境要求
-- **Python**：3.10 / 3.11+
+- **Python**：3.10 / 3.11 / 3.12（**推荐 3.11**；**3.14 不支持**——pydantic-core 0.27 系列没有 cp314 预编译 wheel，编译会失败）
 - **Node.js**：v18+ (包含 npm)
+- **Git**：任意
 
 ### 2.2 一键启动（推荐）
 直接双击项目根目录下的批处理脚本：
@@ -41,7 +42,57 @@ start_edumind.bat
 
 ---
 
-### 2.4 功能操作测试流程（建议测试同学按此顺序体验）
+
+### 2.4 协作者从零开始（克隆后 5 分钟跑通）
+
+如果你刚刚 `git clone` 了本仓库，需要先把缺失的本地数据补齐：
+
+```bash
+# 1) 克隆
+git clone https://github.com/Bear-Lan/EduMind.git
+cd EduMind/EduMind
+
+# 2) 后端 venv + 依赖
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install --upgrade pip
+.\venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
+
+# 3) 前端依赖
+cd frontend && npm install && cd ..
+
+# 4) 准备 .env（保持空白也能跑，但 RAG 失效）
+copy .env.example .env
+# 推荐：申请硅基流动免费 key 填到 EMBEDDING_API_KEY（5 分钟，免费档 5000 万 token）
+# https://siliconflow.cn 注册 → 实名 → 创建 API Key
+
+# 5) 灌演示数据 + 教辅知识库（数据库和向量库不在仓库里）
+.\venv\Scripts\python.exe -m uvicorn main:app --app-dir backend --host 127.0.0.1 --port 8000
+# 看到 "EduMind V1 ready" 后 Ctrl+C 停掉
+.\venv\Scripts\python.exe scripts\seed_demo_student.py
+.\venv\Scripts\python.exe scripts\seed_resources_v2.py
+# ↑ 这一步必须在**后端停掉**时跑（Qdrant 文件锁）
+
+# 6) 启动
+.\venv\Scripts\python.exe -m uvicorn main:app --app-dir backend
+# 另开终端：cd frontend && npm run dev
+```
+
+> 详细排错（SmartScreen / 401 / 维度冲突 / 中文乱码）见 **CONTRIBUTING.md**。
+
+### 2.5 协作者速查表
+
+| 想做什么 | 跑什么 |
+|---|---|
+| 启动后端 | `venv\Scripts\python.exe -m uvicorn main:app --app-dir backend` |
+| 启动前端 | `cd frontend && npm run dev` |
+| 重置 demo 数据 | `del data\edumind.db` + `python scripts\seed_demo_student.py` |
+| 重新入库教辅 | `python scripts\seed_resources_v2.py`（先停后端） |
+| 重置向量库 | `rm -rf data\qdrant_storage` + 重跑 seed |
+| 健康检查 | `curl http://127.0.0.1:8000/api/v1/health` |
+
+为什么数据库和向量库不在仓库里？见 **CONTRIBUTING.md** 第 2 节。
+
+---### 2.6 功能操作测试流程（建议测试同学按此顺序体验）
 
 ```
 [1. 切换学段/学科] ➔ [2. 学习计划三步打卡] ➔ [3. AI 教练互动答疑] ➔ [4. 知识测评中心] ➔ [5. 数据分析与图表]
