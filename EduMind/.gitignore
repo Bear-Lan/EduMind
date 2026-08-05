@@ -11,6 +11,8 @@ env/
 dist/
 build/
 .eggs/
+release/
+docs/EduMind团队共享版_修改说明与使用指南.docx
 
 # Environment
 .env
@@ -39,6 +41,7 @@ logs/
 # Qdrant local storage (vector DB binary files)
 data/qdrant_storage/
 data/qdrant_db/
+data/qdrant_bge_m3/
 
 # OS
 .DS_Store

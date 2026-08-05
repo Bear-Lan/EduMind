@@ -8,6 +8,7 @@ Handles chat completions, concept explanations, history summarization, and mock 
 import logging
 import httpx
 from config.settings import settings
+from services.model_config import model_config_service
 from llm.prompts import (
     COACH_SYSTEM_PROMPT,
     CHAT_PROMPT_TEMPLATE,
@@ -302,7 +303,8 @@ class LLMService:
         an offline mock responder to allow development/testing without API costs.
         """
         # Prefer runtime key (passed from frontend) over .env setting
-        api_key = runtime_api_key.strip() or settings.deepseek_api_key.strip()
+        runtime = model_config_service.runtime
+        api_key = runtime_api_key.strip() or runtime.llm_api_key.strip()
 
         # Offline Mock Fallback: triggered when key is absent or is a placeholder
         if not api_key or api_key in self.PLACEHOLDER_KEYS:
@@ -356,20 +358,21 @@ class LLMService:
             return mock_text
 
         # Online HTTP Call (OpenAI-compatible)
-        url = f"{settings.deepseek_base_url.rstrip('/')}/chat/completions"
+        url = f"{runtime.llm_base_url.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         payload = {
-            "model": settings.deepseek_model,
+            "model": runtime.llm_model,
             "messages": messages,
-            "max_tokens": settings.deepseek_max_tokens,
-            "temperature": settings.deepseek_temperature,
+            "max_tokens": runtime.llm_max_tokens,
+            "temperature": runtime.llm_temperature,
+            "enable_thinking": runtime.llm_enable_thinking,
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=runtime.llm_timeout_seconds) as client:
                 response = await client.post(url, headers=headers, json=payload)
                 if response.status_code != 200:
                     logger.error(

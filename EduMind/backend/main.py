@@ -26,6 +26,7 @@ from core.exceptions import EduMindException
 from api.router import api_router
 from api.analytics import router as analytics_router
 from database.connection import init_db, close_db
+from services.model_config import bootstrap_admin_and_model_config
 
 # Initialize logging immediately
 setup_logging()
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 50)
 
     await init_db()
+    await bootstrap_admin_and_model_config()
     logger.info("EduMind V1 ready")
 
     yield

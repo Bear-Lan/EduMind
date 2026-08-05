@@ -142,8 +142,8 @@
 
 <script setup>
 import { ref, watch, computed, reactive } from 'vue';
-import { marked } from 'marked';
 import api from '../utils/api';
+import { renderMarkdown } from '../utils/markdown';
 import EduButton from './EduButton.vue';
 
 const props = defineProps({
@@ -248,10 +248,6 @@ function finishAssessment() {
 
 function closeModal() {
   emit('update:modelValue', false);
-}
-
-function renderMarkdown(text) {
-  return marked.parse(text || '');
 }
 
 const scoreClass = computed(() => {

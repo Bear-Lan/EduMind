@@ -21,6 +21,7 @@ from student_profile import student_profile_service
 from recommendation import recommendation_engine
 from rag import rag_module
 from application.orchestrator import orchestrator
+from services.model_config import model_config_service
 
 # ── Shared mock curriculum ────────────────────────────────────────────────────
 MOCK_CURRICULUM = {
@@ -45,6 +46,14 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
     """Asynchronous unit/integration tests for LearningOrchestrator."""
 
     async def asyncSetUp(self) -> None:
+        self.original_settings = {
+            "qdrant_path": settings.qdrant_path,
+            "embedding_dimensions": settings.embedding_dimensions,
+            "embedding_api_key": settings.embedding_api_key,
+            "deepseek_api_key": settings.deepseek_api_key,
+        }
+        self.original_runtime = model_config_service.runtime
+
         # 1. Database Setup (SQLite in-memory)
         self.engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
         self.async_session_factory = async_sessionmaker(
@@ -62,9 +71,12 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
         self.test_qdrant_path = (
             Path(__file__).resolve().parent / "test_data" / "test_qdrant_orch"
         )
+        shutil.rmtree(self.test_qdrant_path, ignore_errors=True)
         settings.qdrant_path = str(self.test_qdrant_path)
         settings.embedding_dimensions = 384
+        settings.embedding_api_key = ""  # Keep tests deterministic and offline
         settings.deepseek_api_key = ""  # Force mock LLM
+        model_config_service.reset_to_environment()
 
         rag_module._client = None
 
@@ -108,6 +120,10 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
         if self.test_qdrant_path.exists():
             shutil.rmtree(self.test_qdrant_path, ignore_errors=True)
 
+        for name, value in self.original_settings.items():
+            setattr(settings, name, value)
+        model_config_service._runtime = self.original_runtime
+
     async def test_handle_chat_workflow(self) -> None:
         """Verify chat workflow resolves RAG, runs LLM, and logs messages to DB."""
         result = await orchestrator.handle_chat(
@@ -119,7 +135,7 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
 
         # Output verification
         self.assertIsNotNone(result["session_id"])
-        self.assertIn("[Mock AI Coach Response]", result["response"])
+        self.assertIn("DEEPSEEK_API_KEY", result["response"])
         self.assertEqual(len(result["references"]), 1)
         self.assertEqual(result["references"][0]["title"], "Algebra Basics")
 
@@ -139,7 +155,7 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(messages[0].role, "user")
         self.assertEqual(messages[0].content, "Explain algebra variables please.")
         self.assertEqual(messages[1].role, "assistant")
-        self.assertIn("[Mock AI Coach Response]", messages[1].content)
+        self.assertIn("DEEPSEEK_API_KEY", messages[1].content)
 
     async def test_handle_learning_plan_workflow(self) -> None:
         """Verify dynamic plan generation, active checks, and LLM guides."""
@@ -151,7 +167,7 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
         # target_topic should be one of the eligible root topics from the mock curriculum
         self.assertIsNotNone(result["target_topic"])
         self.assertEqual(len(result["learning_steps"]), 3)
-        self.assertIn("[Mock AI Coach Response]", result["ai_guide"])
+        self.assertIn("DEEPSEEK_API_KEY", result["ai_guide"])
 
         plan_id_1 = result["plan_id"]
 

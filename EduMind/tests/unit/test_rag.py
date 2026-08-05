@@ -19,12 +19,20 @@ from models import Base
 from config.settings import settings
 from services.embedding import embedding_service
 from rag import rag_module
+from services.model_config import model_config_service
 
 
 class TestRAGAndEmbedding(unittest.IsolatedAsyncioTestCase):
     """Asynchronous unit/integration tests for EmbeddingService and RAGModule."""
 
     async def asyncSetUp(self) -> None:
+        self.original_settings = {
+            "qdrant_path": settings.qdrant_path,
+            "embedding_dimensions": settings.embedding_dimensions,
+            "embedding_api_key": settings.embedding_api_key,
+        }
+        self.original_runtime = model_config_service.runtime
+
         # 1. Database Setup (SQLite in-memory)
         self.engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
         self.async_session_factory = async_sessionmaker(
@@ -42,9 +50,12 @@ class TestRAGAndEmbedding(unittest.IsolatedAsyncioTestCase):
         self.test_qdrant_path = (
             Path(__file__).resolve().parent / "test_data" / "test_qdrant_db"
         )
+        shutil.rmtree(self.test_qdrant_path, ignore_errors=True)
         # Force config settings to use the local test path
         settings.qdrant_path = str(self.test_qdrant_path)
         settings.embedding_dimensions = 384  # Force dimensions to 384 for fast tests
+        settings.embedding_api_key = ""  # Tests must never call the live embedding API
+        model_config_service.reset_to_environment()
 
         # Instantiate fresh Qdrant client for testing
         rag_module._client = None
@@ -65,6 +76,10 @@ class TestRAGAndEmbedding(unittest.IsolatedAsyncioTestCase):
         # Delete local Qdrant DB directory
         if self.test_qdrant_path.exists():
             shutil.rmtree(self.test_qdrant_path, ignore_errors=True)
+
+        for name, value in self.original_settings.items():
+            setattr(settings, name, value)
+        model_config_service._runtime = self.original_runtime
 
     async def test_embedding_service_offline_fallback(self) -> None:
         """Verify the offline mock embedding generator properties."""

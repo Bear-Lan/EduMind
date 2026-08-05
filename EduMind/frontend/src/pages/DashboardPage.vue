@@ -55,13 +55,12 @@
       </div>
 
       <div class="header-actions">
+        <EduButton variant="ghost" size="sm" @click="router.push('/account')">
+          账户设置
+        </EduButton>
         <div class="user-badge" v-if="authStore.user">
           学生 #{{ authStore.user.student_id }}
         </div>
-        <EduButton variant="ghost" size="sm" @click="showConfig = true">
-          <template #prefix>⚙️</template>
-          配置
-        </EduButton>
         <EduButton variant="ghost" size="sm" @click="handleLogout">
           退出
         </EduButton>
@@ -128,29 +127,14 @@
       </div>
     </main>
 
-    <!-- Config Modal -->
-    <EduModal v-model="showConfig" title="⚙️ 系统配置" subtitle="配置你的专属 AI 教练引擎">
-      <div class="config-section">
-        <h4 class="config-title">大模型 API 设置</h4>
-        <EduInput v-model="configForm.apiKey" type="password" label="API Key" placeholder="sk-xxxxxxxx" hint="不填则使用模拟回复模式" />
-        <EduInput v-model="configForm.baseUrl" label="API Base URL" placeholder="https://api.deepseek.com/v1" />
-        <EduInput v-model="configForm.model" label="模型名称" placeholder="deepseek-chat" />
-      </div>
-      <template #footer>
-        <EduButton full-width variant="primary" @click="saveConfig">保存配置</EduButton>
-      </template>
-    </EduModal>
-
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import EduButton from '../components/EduButton.vue';
-import EduModal from '../components/EduModal.vue';
-import EduInput from '../components/EduInput.vue';
 import ProfilePage from './ProfilePage.vue';
 import PlanPage from './PlanPage.vue';
 import ChatPage from './ChatPage.vue';
@@ -163,14 +147,7 @@ import SubjectSwitcher from '../components/SubjectSwitcher.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
-const showConfig = ref(false);
 const activeTab = ref('console'); // 'console' | 'assessment' | 'progress' | 'analytics'
-
-const configForm = reactive({
-  apiKey: authStore.config?.apiKey || '',
-  baseUrl: authStore.config?.baseUrl || 'https://api.deepseek.com/v1',
-  model: authStore.config?.model || 'deepseek-chat'
-});
 
 onMounted(() => {
   if (!authStore.isAuthenticated) {
@@ -183,11 +160,6 @@ function handleLogout() {
   router.push('/');
 }
 
-function saveConfig() {
-  authStore.updateConfig(configForm);
-  showConfig.value = false;
-  window.location.reload();
-}
 </script>
 
 <style scoped>

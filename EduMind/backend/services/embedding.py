@@ -11,6 +11,7 @@ import random
 import httpx
 from config.settings import settings
 from core.exceptions import ServiceUnavailableError
+from services.model_config import model_config_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,21 +30,22 @@ class EmbeddingService:
 
         API key 缺失时使用确定性 hash 伪向量（同文本永远同向量）。
         """
-        api_key = settings.embedding_api_key
-        dimensions = settings.embedding_dimensions
+        runtime = model_config_service.runtime
+        api_key = runtime.embedding_api_key
+        dimensions = runtime.embedding_dimensions
 
         # Offline Mock Fallback
         if not api_key:
             return [self._mock_vector(t, dimensions) for t in texts]
 
         # Online HTTP Request (OpenAI-compatible)
-        url = f"{settings.embedding_base_url.rstrip('/')}/embeddings"
+        url = f"{runtime.embedding_base_url.rstrip('/')}/embeddings"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         payload = {
-            "model": settings.embedding_model,
+            "model": runtime.embedding_model,
             "input": texts,
         }
 

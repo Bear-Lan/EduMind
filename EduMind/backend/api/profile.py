@@ -5,7 +5,7 @@ GET /api/v1/profile
 PUT /api/v1/profile
 """
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db, get_current_student
@@ -35,7 +35,6 @@ async def get_profile(
 @router.put("", response_model=StandardResponse[ProfileResponse])
 async def update_profile(
     payload: ProfileUpdateRequest,
-    x_api_key: str | None = Header(None, alias="X-API-Key"),
     current_student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse[ProfileResponse]:
@@ -46,7 +45,7 @@ async def update_profile(
         goal=payload.current_goal,
         subject=payload.subject,
         preferences=payload.learning_preferences,
-        runtime_api_key=x_api_key or "",
+        runtime_api_key="",
     )
     await db.commit()
     profile_dict = profile.__dict__.copy()

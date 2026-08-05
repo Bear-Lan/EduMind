@@ -11,6 +11,7 @@ from models.history import LearningHistory
 from models.chat import ChatSession, ChatMessage
 from models.resource import LearningResource
 from models.quiz import QuizQuestion, QuizAttempt
+from models.admin import AdminUser, SystemModelConfig
 
 __all__ = [
     "Base",
@@ -23,4 +24,6 @@ __all__ = [
     "LearningResource",
     "QuizQuestion",
     "QuizAttempt",
+    "AdminUser",
+    "SystemModelConfig",
 ]

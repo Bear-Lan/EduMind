@@ -71,7 +71,7 @@
           <!-- Question Stem -->
           <div class="question-section">
             <div class="section-label">📝 题目</div>
-            <div class="stem-text">{{ item.stem }}</div>
+            <div class="stem-text md-content" v-html="renderMarkdown(item.stem)"></div>
           </div>
 
           <!-- Choices (if any) -->
@@ -102,7 +102,7 @@
           <!-- Feedback -->
           <div v-if="item.feedback" class="feedback-section">
             <div class="section-label">🤖 AI 教练评语</div>
-            <div class="feedback-text">{{ stripScore(item.feedback) }}</div>
+            <div class="feedback-text md-content" v-html="renderMarkdown(stripScore(item.feedback))"></div>
           </div>
         </div>
       </div>
@@ -114,6 +114,7 @@
 import { ref, computed, onMounted } from 'vue';
 import api from '../utils/api';
 import { useLearningStore } from '../stores/learning';
+import { renderMarkdown } from '../utils/markdown';
 
 const learningStore = useLearningStore();
 

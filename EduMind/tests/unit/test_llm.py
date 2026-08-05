@@ -15,6 +15,7 @@ sys.path.insert(0, str(backend_dir))
 
 from config.settings import settings
 from llm import llm_service
+from services.model_config import model_config_service
 
 
 class TestLLMService(unittest.IsolatedAsyncioTestCase):
@@ -23,12 +24,15 @@ class TestLLMService(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         # Save original API Key to restore it later
         self.original_api_key = settings.deepseek_api_key
+        self.original_runtime = model_config_service.runtime
         # Force empty key to trigger the mock offline mode for tests
         settings.deepseek_api_key = ""
+        model_config_service.reset_to_environment()
 
     async def asyncTearDown(self) -> None:
         # Restore original configuration
         settings.deepseek_api_key = self.original_api_key
+        model_config_service._runtime = self.original_runtime
 
     async def test_generate_response_mock(self) -> None:
         """Verify mock responder output contains core indicators."""
@@ -39,8 +43,7 @@ class TestLLMService(unittest.IsolatedAsyncioTestCase):
         response = await llm_service.generate_response(messages)
 
         self.assertIn("[Mock AI Coach Response]", response)
-        self.assertIn("How do I solve 2x + 5 = 15?", response)
-        self.assertIn("智能学习教练", response)
+        self.assertIn("DEEPSEEK_API_KEY", response)
 
     async def test_chat_mock(self) -> None:
         """Verify chat prompt is generated and gets mocked."""
@@ -50,7 +53,7 @@ class TestLLMService(unittest.IsolatedAsyncioTestCase):
 
         response = await llm_service.chat(prompt, context, profile_summary)
         self.assertIn("[Mock AI Coach Response]", response)
-        self.assertIn("Algebra score: 0.5", response)
+        self.assertIn("DEEPSEEK_API_KEY", response)
 
     async def test_explain_mock(self) -> None:
         """Verify explain concept gets mocked."""

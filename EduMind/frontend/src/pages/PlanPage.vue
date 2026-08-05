@@ -80,7 +80,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useLearningStore } from '../stores/learning';
-import { marked } from 'marked';
+import { renderMarkdown } from '../utils/markdown';
 import EduButton from '../components/EduButton.vue';
 import EduCard from '../components/EduCard.vue';
 import AssessmentModal from '../components/AssessmentModal.vue';
@@ -102,13 +102,6 @@ const topicZhName = computed(() => {
 
 function handleRegen() {
   learningStore.generatePlan();
-}
-
-function renderMarkdown(text) {
-  if (!text) return '';
-  // In a real app we'd handle carousel, here we just join them and parse
-  const cleanText = text.replace(/\n\s*[-*_]{3,}\s*\n/g, '\n\n---\n\n');
-  return marked.parse(cleanText);
 }
 
 async function completeStep(step) {

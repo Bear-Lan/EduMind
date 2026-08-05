@@ -55,6 +55,9 @@
             {{ mode === 'login' ? '立即登录' : '创建账号并登录' }}
           </EduButton>
         </form>
+        <button type="button" class="admin-entry" @click="router.push('/admin-login')">
+          管理员入口
+        </button>
       </EduCard>
     </div>
   </div>
@@ -101,7 +104,7 @@ async function handleSubmit() {
         target_score: form.target_score
       });
     }
-    router.push('/dashboard');
+    router.push(authStore.studentMustChangePassword ? '/account' : '/dashboard');
   } catch (error) {
     errorMessage.value = error.message || '登录失败，请检查账号密码';
   } finally {
@@ -239,4 +242,17 @@ async function handleSubmit() {
   padding: 8px;
   border-radius: var(--radius-sm);
 }
+
+.admin-entry {
+  width: 100%;
+  margin-top: 18px;
+  padding-top: 14px;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+}
+.admin-entry:hover { color: var(--accent-primary); }
 </style>

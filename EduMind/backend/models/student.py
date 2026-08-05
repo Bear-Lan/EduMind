@@ -5,7 +5,7 @@ Defines Student and StudentProfile ORM entities and relationships.
 """
 
 import datetime
-from sqlalchemy import String, Integer, Float, ForeignKey, DateTime, JSON
+from sqlalchemy import Boolean, String, Integer, Float, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database.base import Base
 
@@ -22,6 +22,8 @@ class Student(Base):
     grade: Mapped[str | None] = mapped_column(String(50), nullable=True)
     subject: Mapped[str | None] = mapped_column(String(50), nullable=True)
     target_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),

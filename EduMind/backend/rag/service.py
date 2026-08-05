@@ -14,6 +14,7 @@ from config.settings import settings
 from models.resource import LearningResource
 from services.embedding import embedding_service
 from core.exceptions import ServiceUnavailableError
+from services.model_config import model_config_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ class RAGModule:
                 await client.create_collection(
                     collection_name=collection_name,
                     vectors_config=models.VectorParams(
-                        size=settings.embedding_dimensions,
+                        size=model_config_service.runtime.embedding_dimensions,
                         distance=models.Distance.COSINE,
                     ),
                 )

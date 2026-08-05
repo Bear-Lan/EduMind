@@ -5,8 +5,7 @@ POST /api/v1/chat
 GET /api/v1/chat/history
 """
 
-from fastapi import APIRouter, Depends, Header
-from typing import Optional
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,12 +24,10 @@ async def chat_with_coach(
     payload: ChatRequest,
     current_student: Student = Depends(get_current_student),
     db: AsyncSession = Depends(get_db),
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ) -> StandardResponse[ChatResponse]:
     """Submit a question to the AI Coach and receive a structured RAG-LLM response."""
     res = await orchestrator.handle_chat(
-        db, current_student.id, payload.message,
-        runtime_api_key=x_api_key or ""
+        db, current_student.id, payload.message
     )
     await db.commit()
     return StandardResponse.ok(

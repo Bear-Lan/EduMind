@@ -69,11 +69,23 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     deepseek_max_tokens: int = 4096
     deepseek_temperature: float = 0.7
+    deepseek_enable_thinking: bool = False
+    deepseek_timeout_seconds: float = 60.0
 
     # JWT
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
+
+    # First-run administrator bootstrap. The password is only used when the
+    # administrator table is empty; afterwards the database hash is authoritative.
+    admin_bootstrap_username: str = "edumind_admin"
+    admin_bootstrap_password: str = ""
+
+    @property
+    def jwt_signing_key(self) -> str:
+        """Return the single key used for both JWT signing and verification."""
+        return self.jwt_secret_key or "default_secret_key_for_testing"
 
     # CORS
     cors_origins: str = "http://localhost:5173"

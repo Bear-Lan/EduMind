@@ -11,6 +11,7 @@ import logging
 from fastapi import APIRouter
 from schemas.response import StandardResponse
 from config.settings import settings
+from services.model_config import model_config_service
 
 router = APIRouter(prefix="/health", tags=["health"])
 logger = logging.getLogger(__name__)
@@ -73,4 +74,4 @@ async def _check_qdrant() -> bool:
 
 async def _check_llm() -> bool:
     """Verify DeepSeek API key is configured (not actual call)."""
-    return bool(settings.deepseek_api_key)
+    return bool(model_config_service.runtime.llm_api_key)

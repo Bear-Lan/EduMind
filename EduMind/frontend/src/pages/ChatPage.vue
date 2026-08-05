@@ -13,7 +13,7 @@
             <button class="quick-btn" @click="sendQuickAction('我还没太懂，能换个角度再讲讲吗？')">🔄 换个角度</button>
           </div>
 
-          <p v-if="!authStore.config?.apiKey" style="color: var(--status-warning); margin-top: 12px; font-size: 13px;">
+          <p v-if="!hasApiKey" style="color: var(--status-warning); margin-top: 12px; font-size: 13px;">
             ⚠️ 当前未配置真实的 API Key，我将使用模拟回复。点击右上角 [配置] 填入密钥即可体验完整功能。
           </p>
         </div>
@@ -88,7 +88,7 @@ import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-dark.css'; // Add syntax highlighting theme
 import api from '../utils/api';
-import { useAuthStore } from '../stores/auth';
+import { renderMarkdown } from '../utils/markdown';
 import EduButton from '../components/EduButton.vue';
 
 // Configure marked to use highlight.js
@@ -100,17 +100,27 @@ marked.setOptions({
   langPrefix: 'hljs language-', // highlight.js css expects a top-level 'hljs' class.
 });
 
-const authStore = useAuthStore();
 const messages = ref([]);
 const inputText = ref('');
 const isTyping = ref(false);
 const messagesContainer = ref(null);
 const textareaRef = ref(null);
+const backendLlmConfigured = ref(false);
+const hasApiKey = backendLlmConfigured;
 
 onMounted(async () => {
-  await loadHistory();
+  await Promise.all([loadHistory(), checkLlmConfig()]);
   scrollToBottom();
 });
+
+async function checkLlmConfig() {
+  try {
+    const res = await api.get('/health');
+    backendLlmConfigured.value = res.data?.llm === 'ok';
+  } catch (err) {
+    console.warn('Failed to check backend LLM configuration:', err);
+  }
+}
 
 async function loadHistory() {
   try {
@@ -190,10 +200,6 @@ async function scrollToBottom() {
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
   }
-}
-
-function renderMarkdown(text) {
-  return marked.parse(text || '');
 }
 
 function escapeHtml(text) {

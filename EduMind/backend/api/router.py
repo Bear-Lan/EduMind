@@ -15,6 +15,8 @@ from api.chat import router as chat_router
 from api.learning import router as learning_router
 from api.resources import router as resources_router
 from api.knowledge_graph import router as kg_router
+from api.admin import router as admin_router
+from api.admin_students import router as admin_students_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -27,3 +29,5 @@ api_router.include_router(chat_router)
 api_router.include_router(learning_router)
 api_router.include_router(resources_router)
 api_router.include_router(kg_router)
+api_router.include_router(admin_router)
+api_router.include_router(admin_students_router)

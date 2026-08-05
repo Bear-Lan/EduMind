@@ -17,11 +17,6 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${authStore.token}`;
     }
     
-    // Add AI Model API Key if configured
-    if (authStore.config && authStore.config.apiKey) {
-      config.headers['X-API-Key'] = authStore.config.apiKey;
-    }
-    
     return config;
   },
   (error) => {
@@ -43,8 +38,10 @@ api.interceptors.response.use(
       if (error.response.status === 401) {
         authStore.logout();
         // The router should ideally handle the redirect, but doing it here is a fallback
-        if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-          window.location.href = '/';
+        const adminArea = window.location.pathname.startsWith('/admin');
+        const target = adminArea ? '/admin-login' : '/';
+        if (window.location.pathname !== target) {
+          window.location.href = target;
         }
       }
       

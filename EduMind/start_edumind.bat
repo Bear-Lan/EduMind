@@ -9,6 +9,12 @@ echo.
 echo ======================================================================
 echo.
 
+:: 0. Create a safe local environment file on first run
+if not exist "%~dp0.env" (
+    echo [SETUP] Creating local .env from the team-safe template...
+    copy /Y "%~dp0.env.example" "%~dp0.env" >nul
+)
+
 :: 1. Check & Auto-create Python Virtual Environment
 if not exist "%~dp0venv\Scripts\python.exe" (
     echo [SETUP] Virtual environment not found at venv\
@@ -51,9 +57,13 @@ echo  - Backend API:    http://127.0.0.1:8000
 echo  - API Docs:       http://127.0.0.1:8000/docs
 echo  - Frontend App:   http://localhost:5173
 echo.
-echo Demo Account:
-echo  - Username: demo_student
-echo  - Password: DemoPassword123!
+echo First-run Administrator:
+echo  - URL:      http://localhost:5173/admin-login
+echo  - Username: edumind_admin
+echo  - Password: EduMindTeam#2026!
+echo  - Change this temporary password immediately after login.
+echo.
+echo Student accounts can be created from the registration tab.
 echo ======================================================================
 echo.
 pause
