@@ -25,6 +25,8 @@ from student_profile import student_profile_service
 from llm import llm_service
 from services.grading import grade
 from services.quiz_selector import pick_question
+from rag.concept_tree import build_concept_tree_for_topic
+from services.concept_mastery import apply_correct_answer_to_concept_tree, collect_leaves
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 
@@ -201,6 +203,15 @@ async def submit_quiz(
     db.add(attempt)
     await db.flush()
 
+    # 3b) 答对 → 本章技能树叶子加深一级（最多 3）
+    leaf_bumps: dict = {}
+    if is_correct or score >= 0.99:
+        bare_tree = await build_concept_tree_for_topic(db, topic=q.topic)
+        leaves = collect_leaves(bare_tree)
+        leaf_bumps = await apply_correct_answer_to_concept_tree(
+            db, current_student.id, q, leaves
+        )
+
     # 4) 更新 mastery（沿用现有 orchestrator 逻辑）
     orchestrator_result = await orchestrator.handle_assessment(
         db=db,
@@ -223,6 +234,7 @@ async def submit_quiz(
             "explanation": q.explanation,
             "attempt_id": attempt.id,
             "new_mastery": orchestrator_result.get("updated_mastery"),
+            "concept_leaf_bumps": leaf_bumps,
         },
         message="判分完成",
     )

@@ -12,10 +12,13 @@ from services.model_config import model_config_service
 from llm.prompts import (
     COACH_SYSTEM_PROMPT,
     CHAT_PROMPT_TEMPLATE,
+    CHAT_PROMPT_TEMPLATE_NO_CONTEXT,
     EXPLAIN_PROMPT_TEMPLATE,
+    EXPLAIN_PROMPT_TEMPLATE_NO_CONTEXT,
     SUMMARIZE_PROMPT_TEMPLATE,
     GENERATE_CURRICULUM_PROMPT,
     GENERATE_QUIZ_PROMPT,
+    GENERATE_STRUCTURED_QUIZ_PROMPT,
     GRADE_QUIZ_PROMPT,
 )
 from core.exceptions import ServiceUnavailableError
@@ -393,14 +396,32 @@ class LLMService:
     async def chat(self, prompt: str, context: str, profile_summary: str, grade: str = "通用", runtime_api_key: str = "") -> str:
         """
         Engage in an AI coaching conversation with grade/stage adaptation.
+
+        Hard-constraint RAG:
+        - When `context` is empty / marked insufficient, use the NO_CONTEXT template
+          to force a "资料不足" refusal and forbid fabrication.
+        - Otherwise use the normal template with retrieved context.
         """
-        user_content = CHAT_PROMPT_TEMPLATE.format(
-            grade=grade,
-            goal=profile_summary,
-            mastery_summary=profile_summary,
-            context=context or "（未找到相关参考背景教辅资料）",
-            question=prompt,
-        )
+        # An empty/whitespace context, or the explicit "no material" marker,
+        # both trigger the refusal branch.
+        ctx_clean = (context or "").strip()
+        insufficient = (not ctx_clean) or ctx_clean.startswith("（资料不足")
+
+        if insufficient:
+            user_content = CHAT_PROMPT_TEMPLATE_NO_CONTEXT.format(
+                grade=grade,
+                goal=profile_summary,
+                mastery_summary=profile_summary,
+                question=prompt,
+            )
+        else:
+            user_content = CHAT_PROMPT_TEMPLATE.format(
+                grade=grade,
+                goal=profile_summary,
+                mastery_summary=profile_summary,
+                context=ctx_clean,
+                question=prompt,
+            )
 
         messages = [
             {"role": "system", "content": COACH_SYSTEM_PROMPT},
@@ -412,13 +433,25 @@ class LLMService:
     async def explain(self, concept: str, context: str, subject: str = "通用", grade: str = "通用", runtime_api_key: str = "") -> str:
         """
         Generate a detailed topic explanation with grade/stage adaptation.
+
+        Hard-constraint RAG: empty/insufficient context -> refusal branch.
         """
-        user_content = EXPLAIN_PROMPT_TEMPLATE.format(
-            grade=grade,
-            subject=subject,
-            context=context or "（未找到相关参考背景教辅资料）",
-            concept=concept,
-        )
+        ctx_clean = (context or "").strip()
+        insufficient = (not ctx_clean) or ctx_clean.startswith("（资料不足")
+
+        if insufficient:
+            user_content = EXPLAIN_PROMPT_TEMPLATE_NO_CONTEXT.format(
+                grade=grade,
+                subject=subject,
+                concept=concept,
+            )
+        else:
+            user_content = EXPLAIN_PROMPT_TEMPLATE.format(
+                grade=grade,
+                subject=subject,
+                context=ctx_clean,
+                concept=concept,
+            )
 
         messages = [
             {"role": "system", "content": COACH_SYSTEM_PROMPT},
@@ -525,7 +558,42 @@ class LLMService:
             return f"（模拟测验）针对【{topic}】，请用自己的话解释一下它的核心概念是什么？"
             
         return response_text.strip()
-        
+
+    async def generate_structured_quiz(
+        self,
+        topic: str,
+        subject: str,
+        grade: str,
+        leaf_label: str,
+        runtime_api_key: str = "",
+    ) -> dict | None:
+        """
+        Generate a single structured quiz question for a concept leaf.
+        Returns a dict matching QuizQuestion fields, or None on failure/mock.
+        """
+        prompt = GENERATE_STRUCTURED_QUIZ_PROMPT.format(
+            leaf_label=leaf_label, subject=subject or "通用", grade=grade or "通用"
+        )
+        response_text = await self.generate_response(
+            [{"role": "user", "content": prompt}], runtime_api_key
+        )
+
+        if "Mock AI Coach Response" in response_text or "No DEEPSEEK_API_KEY" in response_text:
+            return None
+
+        import json as _json
+        import re as _re
+        cleaned = _re.sub(r"^```(?:json)?|```$", "", response_text.strip(), flags=_re.MULTILINE).strip()
+        try:
+            data = _json.loads(cleaned)
+        except Exception as exc:
+            logger.warning("generate_structured_quiz JSON parse failed: %s", exc)
+            return None
+
+        if not data.get("stem") or not data.get("question_type") or not data.get("correct_answer"):
+            return None
+        return data
+
     async def grade_answer(self, topic: str, question: str, answer: str, runtime_api_key: str = "") -> dict:
         """Grade a student's answer and return score and feedback."""
         prompt = GRADE_QUIZ_PROMPT.format(topic=topic, question=question, answer=answer)

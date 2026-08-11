@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     qdrant_path: str | None = None
     qdrant_collection_name: str = "edumind_resources"
 
+    # RAG retrieval quality gate
+    rag_score_threshold: float = 0.35  # cosine similarity below this is dropped; empty -> refusal
+
     # Embeddings (OpenAI-compatible)
     embedding_api_key: str = ""
     embedding_base_url: str = "https://api.openai.com/v1"

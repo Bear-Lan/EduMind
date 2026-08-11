@@ -21,22 +21,41 @@
     </div>
 
     <div v-else class="plan-content">
-      <div class="toolbar" style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+      <div class="toolbar">
         <EduButton size="sm" variant="ghost" :loading="learningStore.loadingPlan" @click="handleRegen">
           <template #prefix>🔄</template>
           重新推荐
         </EduButton>
       </div>
-      <!-- AI Guide / Carousel -->
-      <div v-if="plan.ai_guide" class="ai-guide">
-        <div class="guide-header">💡 知识点精讲</div>
-        <!-- Simplified markdown rendering for now -->
-        <div class="md-content" v-html="renderMarkdown(plan.ai_guide)"></div>
-      </div>
+
+      <!-- 本章概念树：放在「突破章节」上方 -->
+      <section class="visual-panel">
+        <div class="visual-header">
+          <h4>本章掌握度导图</h4>
+          <p>参考技能树样式：圆点 + 曲线连线；点击分支可折叠。叶子亮度随刷题答对加深（L0–L3）。</p>
+        </div>
+
+        <div v-if="plan.reason" class="reason-box">
+          <span class="reason-label">为什么推这一章</span>
+          <p>{{ plan.reason }}</p>
+        </div>
+
+        <ChapterConceptTree
+          :root="conceptTree"
+          :loading="treeLoading"
+          @lecture="onLecture"
+          @quiz="onQuiz"
+        />
+      </section>
 
       <h3 class="topic-title">
         📌 当前突破章节：{{ topicZhName }}
       </h3>
+
+      <div v-if="plan.ai_guide" class="ai-guide">
+        <div class="guide-header">💡 知识点精讲</div>
+        <div class="md-content" v-html="renderMarkdown(plan.ai_guide)"></div>
+      </div>
 
       <div class="steps-list">
         <EduCard 
@@ -74,24 +93,43 @@
       :topicName="topicZhName"
       @completed="onAssessmentCompleted"
     />
+
+    <LeafLectureModal
+      v-model="showLecture"
+      :leafId="activeLeafId"
+      @done="onLectureDone"
+    />
+
+    <LeafQuizModal
+      v-model="showLeafQuiz"
+      :leafId="activeLeafId"
+      :slot="activeQuizSlot"
+      @done="onLeafQuizDone"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useLearningStore } from '../stores/learning';
 import { renderMarkdown } from '../utils/markdown';
+import api from '../utils/api';
 import EduButton from '../components/EduButton.vue';
 import EduCard from '../components/EduCard.vue';
 import AssessmentModal from '../components/AssessmentModal.vue';
+import ChapterConceptTree from '../components/ChapterConceptTree.vue';
+import LeafLectureModal from '../components/LeafLectureModal.vue';
+import LeafQuizModal from '../components/LeafQuizModal.vue';
 
 const learningStore = useLearningStore();
 const showAssessment = ref(false);
 const activeStep = ref(null);
-
-onMounted(() => {
-  learningStore.fetchCurrentPlan();
-});
+const treeLoading = ref(false);
+const conceptTree = ref(null);
+const showLecture = ref(false);
+const showLeafQuiz = ref(false);
+const activeLeafId = ref('');
+const activeQuizSlot = ref(1);
 
 const plan = computed(() => learningStore.plan);
 
@@ -100,17 +138,81 @@ const topicZhName = computed(() => {
   return learningStore.topicsMap[plan.value.target_topic] || plan.value.target_topic;
 });
 
+async function loadConceptTree() {
+  const topic = plan.value?.target_topic;
+  if (!topic) {
+    conceptTree.value = null;
+    return;
+  }
+
+  treeLoading.value = true;
+  try {
+    if (!learningStore.profile) {
+      await learningStore.fetchProfile();
+    }
+    const res = await api.get('/resources/concept-tree', {
+      params: {
+        topic,
+        label: topicZhName.value || topic,
+      },
+    });
+    conceptTree.value = res.data || null;
+  } catch (err) {
+    console.error('Failed to load chapter concept tree', err);
+    conceptTree.value = null;
+  } finally {
+    treeLoading.value = false;
+  }
+}
+
+onMounted(async () => {
+  await learningStore.fetchCurrentPlan();
+  await loadConceptTree();
+});
+
+watch(
+  () => plan.value?.target_topic,
+  () => {
+    loadConceptTree();
+  }
+);
+
 function handleRegen() {
-  learningStore.generatePlan();
+  learningStore.generatePlan().then(() => loadConceptTree());
+}
+
+function onLecture(payload) {
+  activeLeafId.value = payload.leaf_id;
+  showLecture.value = true;
+}
+
+function onQuiz(payload) {
+  activeLeafId.value = payload.leaf_id;
+  // 后端给出第一个未通关的题位（1/2/null）；null 表示两题都对了，已通关
+  if (!payload.slot) {
+    alert('该要点已通关（精讲 + 两题全部答对），无需再练');
+    return;
+  }
+  activeQuizSlot.value = payload.slot;
+  showLeafQuiz.value = true;
+}
+
+async function onLectureDone() {
+  await loadConceptTree();
+}
+
+async function onLeafQuizDone(payload) {
+  // 若该 slot 不正确或想继续刷，可手动再点例题练习
+  if (payload?.is_correct) {
+    await loadConceptTree();
+  }
 }
 
 async function completeStep(step) {
   activeStep.value = step;
   if (step.step_number === plan.value.learning_steps.length) {
-    // This is the last step (assessment), show modal
     showAssessment.value = true;
   } else {
-    // Normal step, mark as complete with 1.0 score
     await learningStore.completeStep(plan.value.plan_id, step.step_number, 1.0);
   }
 }
@@ -120,6 +222,7 @@ async function onAssessmentCompleted(score) {
     await learningStore.completeStep(plan.value.plan_id, activeStep.value.step_number, score);
     activeStep.value = null;
   }
+  await loadConceptTree();
 }
 </script>
 
@@ -153,6 +256,53 @@ async function onAssessmentCompleted(score) {
 
 .plan-content {
   padding: 16px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.visual-panel {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(167, 139, 250, 0.18);
+}
+
+.visual-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ddd6fe;
+}
+.visual-header p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.reason-box {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.16);
+}
+.reason-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c4b5fd;
+  margin-bottom: 6px;
+}
+.reason-box p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
 }
 
 .ai-guide {

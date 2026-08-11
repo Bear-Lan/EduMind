@@ -68,11 +68,12 @@ class RAGModule:
             )
             raise ServiceUnavailableError("Vector Database")
 
-    async def search(self, query_vector: list[float], limit: int = 3) -> list[str]:
+    async def search(self, query_vector: list[float], limit: int = 3) -> list[tuple[str, float]]:
         """
         Query Qdrant collection using the query vector.
 
-        Returns matching point IDs (UUID string representation).
+        Returns list of (point_id, score) tuples ranked by similarity (highest first).
+        Qdrant cosine distance is converted to similarity in [0,1].
         """
         client = self.get_client()
         await self._ensure_collection(client)
@@ -83,40 +84,64 @@ class RAGModule:
                 query_vector=query_vector,
                 limit=limit,
             )
-            # Qdrant point IDs can be strings (UUIDs) or integers
-            return [str(point.id) for point in results]
+            scored: list[tuple[str, float]] = []
+            for point in results:
+                # Qdrant returns `score` which for Cosine distance is in [-1, 1]
+                # (higher = more similar). Normalize to [0, 1].
+                raw = float(point.score) if hasattr(point, "score") else 0.0
+                sim = (raw + 1.0) / 2.0 if raw < 1.0 else raw
+                scored.append((str(point.id), sim))
+            # Already ranked by Qdrant; keep order
+            return scored
         except Exception as exc:
             logger.error(f"Failed to search Qdrant index: {exc}")
             raise ServiceUnavailableError("Vector Database Query")
 
     async def retrieve(
-        self, db: AsyncSession, query: str, limit: int = 3
+        self,
+        db: AsyncSession,
+        query: str,
+        limit: int = 3,
+        score_threshold: float | None = None,
     ) -> list[LearningResource]:
         """
-        Retrieve relevant learning resources.
+        Retrieve relevant learning resources, filtered by similarity threshold.
 
-        Orchestrates: Embedding generation -> Vector Search -> Database entity query.
-        Preserves similarity ranking returned by the vector search.
+        - Drops hits with similarity < score_threshold.
+        - Returns [] when nothing passes (caller should treat as "no context").
         """
+        if score_threshold is None:
+            score_threshold = settings.rag_score_threshold
+
         # 1. Generate Query Embedding
         query_vector = await embedding_service.get_embedding(query)
 
-        # 2. Search Qdrant
-        embedding_ids = await self.search(query_vector, limit=limit)
-        if not embedding_ids:
+        # 2. Search Qdrant (with scores)
+        scored = await self.search(query_vector, limit=limit)
+        if not scored:
+            return []
+
+        # Filter by similarity threshold
+        kept_ids = [pid for pid, sim in scored if sim >= score_threshold]
+        if not kept_ids:
+            logger.info(
+                "RAG retrieve: no hits above threshold %.2f (best=%.3f)",
+                score_threshold,
+                max((s for _, s in scored), default=0.0),
+            )
             return []
 
         # 3. Retrieve entities from PostgreSQL
         results = await db.scalars(
             select(LearningResource).where(
-                LearningResource.embedding_id.in_(embedding_ids)
+                LearningResource.embedding_id.in_(kept_ids)
             )
         )
 
         # Re-order based on Qdrant similarity rank
         resource_map = {r.embedding_id: r for r in results}
         ordered_resources = [
-            resource_map[eid] for eid in embedding_ids if eid in resource_map
+            resource_map[eid] for eid in kept_ids if eid in resource_map
         ]
 
         # 4. Rerank (MVP pass-through)
