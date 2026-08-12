@@ -49,9 +49,11 @@ def _progress_to_level(prog: dict) -> int:
     lvl = 0
     if prog.get("lecture"):
         lvl += 1
-    if prog.get("quiz1", {}).get("correct"):
+    q1 = prog.get("quiz1") if isinstance(prog.get("quiz1"), dict) else {}
+    q2 = prog.get("quiz2") if isinstance(prog.get("quiz2"), dict) else {}
+    if q1.get("correct"):
         lvl += 1
-    if prog.get("quiz2", {}).get("correct"):
+    if q2.get("correct"):
         lvl += 1
     return clamp_level(lvl)
 
@@ -64,9 +66,11 @@ def progress_to_level(prog: dict | None) -> int:
 def next_quiz_slot(prog: dict | None) -> int | None:
     """First quiz slot (1 or 2) not yet answered correctly; None if both done."""
     p = prog or {}
-    if not p.get("quiz1", {}).get("correct"):
+    q1 = p.get("quiz1") if isinstance(p.get("quiz1"), dict) else {}
+    q2 = p.get("quiz2") if isinstance(p.get("quiz2"), dict) else {}
+    if not q1.get("correct"):
         return 1
-    if not p.get("quiz2", {}).get("correct"):
+    if not q2.get("correct"):
         return 2
     return None
 
@@ -74,7 +78,27 @@ def next_quiz_slot(prog: dict | None) -> int | None:
 def get_leaf_progress(profile) -> dict[str, dict]:
     prefs = dict(profile.learning_preferences or {})
     raw = prefs.get(PROGRESS_KEY) or {}
-    return {str(k): dict(v) for k, v in raw.items()}
+    out: dict[str, dict] = {}
+    for k, v in raw.items():
+        if isinstance(v, dict):
+            # Normalize nested quiz slots so callers can safely .get("correct")
+            q1 = v.get("quiz1") if isinstance(v.get("quiz1"), dict) else {"qid": None, "correct": False}
+            q2 = v.get("quiz2") if isinstance(v.get("quiz2"), dict) else {"qid": None, "correct": False}
+            out[str(k)] = {
+                "lecture": bool(v.get("lecture")),
+                "quiz1": {"qid": q1.get("qid"), "correct": bool(q1.get("correct"))},
+                "quiz2": {"qid": q2.get("qid"), "correct": bool(q2.get("correct"))},
+            }
+        elif isinstance(v, (int, float)):
+            # Legacy: stored bare level int → approximate progress
+            lvl = clamp_level(v)
+            out[str(k)] = {
+                "lecture": lvl >= 1,
+                "quiz1": {"qid": None, "correct": lvl >= 2},
+                "quiz2": {"qid": None, "correct": lvl >= 3},
+            }
+        # ignore corrupt entries
+    return out
 
 
 def get_leaf_levels(profile) -> dict[str, int]:
@@ -86,7 +110,8 @@ def get_leaf_levels(profile) -> dict[str, int]:
 async def _ensure_profile(db: AsyncSession, student_id: int):
     profile = await student_profile_service.get_profile(db, student_id)
     prefs = dict(profile.learning_preferences or {})
-    progress = {str(k): dict(v) for k, v in (prefs.get(PROGRESS_KEY) or {}).items()}
+    # Reuse the same normalizer so legacy/corrupt entries don't crash writes
+    progress = get_leaf_progress(profile)
     return profile, prefs, progress
 
 

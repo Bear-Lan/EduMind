@@ -1298,14 +1298,17 @@ async def main():
     async for db in get_db_session():
         for item in RESOURCES:
             existing = (await db.execute(
-                select(LearningResource).where(LearningResource.title == item["title"])
-            )).scalar_one_or_none()
+                select(LearningResource).where(
+                    (LearningResource.parent_doc == item["title"])
+                    | (LearningResource.title == item["title"])
+                )
+            )).scalars().first()
             if existing:
                 skipped += 1
                 continue
 
             try:
-                await rag_module.upsert_resource(
+                chunks = await rag_module.upsert_document(
                     db=db,
                     title=item["title"],
                     subject=item["subject"],
@@ -1314,7 +1317,7 @@ async def main():
                     source=item.get("source"),
                 )
                 inserted += 1
-                logger.info(f"✓ {item['title']}")
+                logger.info(f"✓ {item['title']} ({len(chunks)} chunk(s))")
             except Exception as exc:
                 failed += 1
                 logger.error(f"✗ {item['title']}: {exc}")

@@ -61,8 +61,10 @@ def _leaf_virtual_children(leaf_id: str, progress: dict | None) -> list[dict]:
     """
     p = progress or {}
     lecture_done = bool(p.get("lecture"))
-    quiz1_correct = bool(p.get("quiz1", {}).get("correct"))
-    quiz2_correct = bool(p.get("quiz2", {}).get("correct"))
+    q1 = p.get("quiz1") if isinstance(p.get("quiz1"), dict) else {}
+    q2 = p.get("quiz2") if isinstance(p.get("quiz2"), dict) else {}
+    quiz1_correct = bool(q1.get("correct"))
+    quiz2_correct = bool(q2.get("correct"))
     quiz_done = quiz1_correct and quiz2_correct
     next_slot = None if quiz_done else next_quiz_slot(p)
     return [
@@ -115,9 +117,18 @@ async def build_concept_tree_for_topic(
             select(LearningResource)
             .where(LearningResource.topic == topic)
             .order_by(LearningResource.id.asc())
-            .limit(max_branches)
         )
     ).all()
+
+    # Group chunks by parent_doc so skill-tree branches = documents, not every chunk
+    grouped: dict[str, list] = {}
+    order: list[str] = []
+    for res in rows:
+        key = (res.parent_doc or res.title or f"res-{res.id}").strip()
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(res)
 
     # Single source of truth: prefer raw per-leaf progress; derive levels from it.
     # Fall back to leaf_levels (legacy) when progress not supplied.
@@ -128,13 +139,17 @@ async def build_concept_tree_for_topic(
     progress_map = leaf_progress or {}
 
     children = []
-    for res in rows:
-        leaves = extract_key_points(res.content or "", limit=max_leaves_per_branch)
+    for key in order[:max_branches]:
+        chunks = sorted(grouped[key], key=lambda r: (r.chunk_index or 0, r.id or 0))
+        anchor = chunks[0]
+        merged = "\n".join((c.content or "").strip() for c in chunks if c.content)
+        leaves = extract_key_points(merged, limit=max_leaves_per_branch)
         if not leaves:
             continue
         leaf_nodes = []
         for point in leaves:
-            lid = stable_leaf_id(res.id, point)
+            # stable id anchored on the first chunk of this parent doc
+            lid = stable_leaf_id(anchor.id, point)
             lvl = int(levels.get(lid, 0))
             prog = progress_map.get(lid) or {}
             leaf_nodes.append(
@@ -143,16 +158,17 @@ async def build_concept_tree_for_topic(
                     "label": point,
                     "leaf": True,
                     "level": lvl,
-                    "resource_id": res.id,
+                    "resource_id": anchor.id,
+                    "parent_doc": key,
                     "progress": prog,
                     "children": _leaf_virtual_children(lid, prog),
                 }
             )
         children.append(
             {
-                "id": f"res-{res.id}",
-                "label": res.title,
-                "source": res.source,
+                "id": f"doc-{anchor.id}",
+                "label": key,
+                "source": anchor.source,
                 "children": leaf_nodes,
             }
         )
@@ -161,6 +177,6 @@ async def build_concept_tree_for_topic(
         "topic": topic,
         "label": label,
         "children": children,
-        "resource_count": len(rows),
+        "resource_count": len(order),
     }
     return annotate_tree_levels(tree, levels)

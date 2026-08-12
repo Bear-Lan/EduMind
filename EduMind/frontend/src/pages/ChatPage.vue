@@ -35,14 +35,39 @@
           <div class="ref-list">
             <div
               v-for="(ref, i) in msg.references"
-              :key="ref.title || i"
+              :key="ref.id || ref.title || i"
               class="ref-chip"
+              :class="{ expanded: isRefExpanded(idx, i) }"
             >
               <div class="ref-num">{{ i + 1 }}</div>
               <div class="ref-body">
-                <div class="ref-title">{{ ref.title || '参考资料' }}</div>
-                <div class="ref-source" v-if="ref.source">📖 {{ ref.source }}</div>
-                <div class="ref-source" v-if="ref.topic">🏷 {{ ref.topic }}</div>
+                <div class="ref-top">
+                  <div class="ref-title">{{ ref.title || '参考资料' }}</div>
+                  <span v-if="ref.score != null" class="ref-score" :title="'相关度 ' + formatScore(ref.score)">
+                    {{ formatScore(ref.score) }}
+                  </span>
+                </div>
+                <div class="ref-meta">
+                  <span v-if="ref.parent_doc || ref.source">📖 {{ ref.parent_doc || ref.source }}</span>
+                  <span v-if="ref.chapter">· {{ ref.chapter }}</span>
+                  <span v-if="ref.section">· {{ ref.section }}</span>
+                  <span v-if="ref.subject">· {{ ref.subject }}</span>
+                  <span v-if="ref.chunk_index != null">· chunk#{{ Number(ref.chunk_index) + 1 }}</span>
+                </div>
+                <p v-if="ref.snippet && !isRefExpanded(idx, i)" class="ref-snippet">
+                  {{ ref.snippet }}
+                </p>
+                <div v-if="isRefExpanded(idx, i) && ref.content" class="ref-full">
+                  {{ ref.content }}
+                </div>
+                <button
+                  v-if="ref.content || ref.snippet"
+                  type="button"
+                  class="ref-toggle"
+                  @click="toggleRef(idx, i)"
+                >
+                  {{ isRefExpanded(idx, i) ? '收起原文' : '展开原文' }}
+                </button>
               </div>
             </div>
           </div>
@@ -107,6 +132,30 @@ const messagesContainer = ref(null);
 const textareaRef = ref(null);
 const backendLlmConfigured = ref(false);
 const hasApiKey = backendLlmConfigured;
+/** messageIdx -> Set(refIdx) */
+const expandedRefs = ref({});
+
+function refKey(msgIdx, refIdx) {
+  return `${msgIdx}:${refIdx}`;
+}
+
+function isRefExpanded(msgIdx, refIdx) {
+  return !!expandedRefs.value[refKey(msgIdx, refIdx)];
+}
+
+function toggleRef(msgIdx, refIdx) {
+  const key = refKey(msgIdx, refIdx);
+  expandedRefs.value = {
+    ...expandedRefs.value,
+    [key]: !expandedRefs.value[key],
+  };
+}
+
+function formatScore(score) {
+  const n = Number(score);
+  if (Number.isNaN(n)) return '';
+  return `${Math.round(n * 100)}%`;
+}
 
 onMounted(async () => {
   await Promise.all([loadHistory(), checkLlmConfig()]);
@@ -304,6 +353,10 @@ function escapeHtml(text) {
   background: rgba(99, 102, 241, 0.12);
   border-color: rgba(99, 102, 241, 0.4);
 }
+.ref-chip.expanded {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: rgba(99, 102, 241, 0.1);
+}
 .ref-num {
   flex-shrink: 0;
   width: 22px;
@@ -318,16 +371,66 @@ function escapeHtml(text) {
   font-weight: 700;
 }
 .ref-body { flex: 1; min-width: 0; }
+.ref-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
 .ref-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 2px;
 }
-.ref-source {
+.ref-score {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.ref-meta {
   font-size: 10px;
   color: var(--text-secondary);
-  margin-top: 1px;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.ref-snippet {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #cbd5e1;
+}
+.ref-full {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.ref-toggle {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ref-toggle:hover {
+  color: #ddd6fe;
+  text-decoration: underline;
 }
 
 .quick-actions {

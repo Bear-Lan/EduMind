@@ -59,6 +59,22 @@ class Settings(BaseSettings):
 
     # RAG retrieval quality gate
     rag_score_threshold: float = 0.35  # cosine similarity below this is dropped; empty -> refusal
+    rag_chunk_size: int = 500
+    rag_chunk_overlap: int = 80
+    # Two-stage retrieval: vector recall → lexical rerank
+    rag_recall_limit: int = 20
+    rag_rerank_top_k: int = 3
+    rag_rerank_vector_weight: float = 0.55  # rest = lexical overlap weight
+    # Hybrid recall: vector + keyword (problem nos / formulas / proper nouns)
+    rag_hybrid_enabled: bool = True
+    rag_keyword_limit: int = 20
+    rag_hybrid_rrf_k: int = 60
+    rag_hybrid_vector_weight: float = 1.0
+    rag_hybrid_keyword_weight: float = 1.2  # slightly prefer exact-term channel
+    # When fused rerank score is below gate, only keep keyword hits ≥ this score
+    rag_keyword_relax_min_score: float = 0.45
+    # Cap citation expand payload (chars); longer chunks are truncated
+    rag_reference_content_max_chars: int = 2000
 
     # Embeddings (OpenAI-compatible)
     embedding_api_key: str = ""

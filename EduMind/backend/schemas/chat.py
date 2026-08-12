@@ -17,9 +17,24 @@ class ChatRequest(BaseModel):
 class ChatReference(BaseModel):
     """Reference document schema returned alongside AI answers."""
 
+    id: int | None = None
     title: str
     topic: str
-    source: str | None
+    subject: str | None = None
+    source: str | None = None
+    parent_doc: str | None = None
+    chapter: str | None = None
+    section: str | None = None
+    chunk_index: int | None = None
+    score: float | None = Field(
+        None,
+        description="Fused retrieval relevance in [0,1] (vector + keyword + rerank), not raw cosine",
+    )
+    snippet: str | None = Field(None, description="Short excerpt for citation preview")
+    content: str | None = Field(
+        None,
+        description="Textbook segment for expand view (may be truncated for payload size)",
+    )
 
 
 class ChatResponse(BaseModel):

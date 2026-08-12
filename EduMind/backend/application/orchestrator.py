@@ -48,8 +48,20 @@ class LearningOrchestrator:
         # 1. Fetch student profile
         profile = await student_profile_service.get_profile(db, student_id)
 
-        # 2. Retrieve RAG educational context
-        resources = await rag_module.retrieve(db, query=message, limit=3)
+        from models.student import Student
+        student = await db.scalar(select(Student).where(Student.id == student_id))
+        subject = (student.subject if student else None) or "数学"
+        grade = (student.grade if student else None) or (profile.current_goal or "通用").split()[0]
+
+        # 2. Retrieve RAG educational context (scoped to subject/grade — no cross-subject)
+        scored = await rag_module.retrieve_scored(
+            db,
+            query=message,
+            limit=3,
+            subject=subject,
+            grade=grade,
+        )
+        resources = [res for res, _ in scored]
         context_string = rag_module.build_context(resources)
 
         # 3. Format Student Context Summary
@@ -57,10 +69,6 @@ class LearningOrchestrator:
             f"目标: {profile.current_goal or '无'} | "
             f"当前掌握度: {profile.mastery_map or {}}"
         )
-
-        from models.student import Student
-        student = await db.scalar(select(Student).where(Student.id == student_id))
-        grade = (student.grade if student else None) or (profile.current_goal or "通用").split()[0]
 
         # 4. Generate AI Coach response
         ai_response = await llm_service.chat(
@@ -98,10 +106,7 @@ class LearningOrchestrator:
         return {
             "session_id": session.id,
             "response": ai_response,
-            "references": [
-                {"title": res.title, "topic": res.topic, "source": res.source}
-                for res in resources
-            ],
+            "references": rag_module.build_references(scored, query=message),
         }
 
     async def handle_learning_plan(self, db: AsyncSession, student_id: int, runtime_api_key: str = "", force_topic: str = None) -> dict:
@@ -176,17 +181,22 @@ class LearningOrchestrator:
             if plan.ai_guide:
                 ai_guide = plan.ai_guide
             else:
-                # Retrieve segment textbooks for RAG context
-                resources = await rag_module.retrieve(db, query=plan.target_topic, limit=2)
+                # Retrieve segment textbooks for RAG context (scoped to subject/grade)
+                resources = await rag_module.retrieve(
+                    db,
+                    query=plan.target_topic,
+                    limit=2,
+                    subject=subject,
+                    grade=grade or None,
+                )
                 context_string = rag_module.build_context(resources)
 
-                grade = (student.grade if student else None) or (profile.current_goal or "通用").split()[0]
                 # Generate concept guide for current subject and grade stage
                 ai_guide = await llm_service.explain(
                     concept=plan.target_topic,
                     context=context_string,
                     subject=subject,
-                    grade=grade,
+                    grade=grade or "通用",
                     runtime_api_key=runtime_api_key
                 )
                 # Cache it in the database

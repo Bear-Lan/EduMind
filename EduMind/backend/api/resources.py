@@ -10,7 +10,7 @@ import random
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db, get_current_student
@@ -77,14 +77,19 @@ async def seed_resources(
     seeded = 0
     skipped = 0
     for item in items:
-        # Check if already exists by title
+        # Idempotent on parent document title (covers multi-chunk ingest)
         existing = await db.scalar(
-            select(LearningResource.id).where(LearningResource.title == item.title)
+            select(LearningResource.id).where(
+                or_(
+                    LearningResource.parent_doc == item.title,
+                    LearningResource.title == item.title,
+                )
+            )
         )
         if existing:
             skipped += 1
             continue
-        await rag_module.upsert_resource(
+        await rag_module.upsert_document(
             db=db,
             title=item.title,
             subject=item.subject,
@@ -108,19 +113,15 @@ async def search_resources(
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse:
     """Query textbooks and reference materials using RAG semantic lookup."""
-    resources = await rag_module.retrieve(db, query=q, limit=limit)
+    scored = await rag_module.retrieve_scored(
+        db,
+        query=q,
+        limit=limit,
+        subject=current_student.subject,
+        grade=current_student.grade,
+    )
     return StandardResponse.ok(
-        data=[
-            {
-                "id": res.id,
-                "title": res.title,
-                "subject": res.subject,
-                "topic": res.topic,
-                "source": res.source,
-                "content": res.content,
-            }
-            for res in resources
-        ],
+        data=rag_module.build_references(scored, query=q),
         message="Search results retrieved successfully",
     )
 
@@ -147,7 +148,7 @@ async def get_leaf_lecture(
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse:
     """
-    返回该叶子对应的教辅原文片段（精讲内容，稳定不幻觉）。
+    返回该叶子对应的教辅原文（按 parent_doc 拼齐所有 chunk，稳定不幻觉）。
     """
     res_id = _parse_leaf_id(leaf_id)
     if res_id is None:
@@ -156,13 +157,36 @@ async def get_leaf_lecture(
     if not resource:
         raise NotFoundError("LearningResource", str(res_id))
 
+    parent = resource.parent_doc or resource.title
+    siblings = (
+        await db.scalars(
+            select(LearningResource)
+            .where(
+                LearningResource.topic == resource.topic,
+                or_(
+                    LearningResource.parent_doc == parent,
+                    LearningResource.title == parent,
+                ),
+            )
+            .order_by(LearningResource.chunk_index.asc(), LearningResource.id.asc())
+        )
+    ).all()
+    if not siblings:
+        siblings = [resource]
+
+    content = "\n\n".join((c.content or "").strip() for c in siblings if c.content)
+    chapters = sorted({c.chapter for c in siblings if c.chapter})
+
     return StandardResponse.ok(
         data={
             "leaf_id": leaf_id,
-            "title": resource.title,
+            "title": parent,
             "source": resource.source,
-            "content": resource.content,
+            "content": content or resource.content,
             "topic": resource.topic,
+            "parent_doc": parent,
+            "chapter": chapters[0] if len(chapters) == 1 else None,
+            "chunk_count": len(siblings),
         },
         message="Leaf lecture retrieved",
     )
@@ -205,9 +229,23 @@ async def get_leaf_quiz(
     topic = resource.topic
     subject = resource.subject
     leaf_label = leaf_id  # fallback
-    # 反推叶子文案：从 content 切句找包含的片段（粗略）
-    points = extract_key_points(resource.content or "", limit=12)
-    # 叶子 id 由 res_id + 文案 md5 生成，这里直接用 points 重新匹配
+    # 反推叶子文案：按 parent_doc 拼齐 chunk 再切要点
+    parent = resource.parent_doc or resource.title
+    siblings = (
+        await db.scalars(
+            select(LearningResource)
+            .where(
+                LearningResource.topic == resource.topic,
+                or_(
+                    LearningResource.parent_doc == parent,
+                    LearningResource.title == parent,
+                ),
+            )
+            .order_by(LearningResource.chunk_index.asc(), LearningResource.id.asc())
+        )
+    ).all()
+    merged = "\n".join((c.content or "") for c in (siblings or [resource]))
+    points = extract_key_points(merged, limit=12)
     for p in points:
         if stable_leaf_id(res_id, p) == leaf_id:
             leaf_label = p
@@ -355,6 +393,10 @@ async def get_resource_detail(
             "topic": resource.topic,
             "source": resource.source,
             "content": resource.content,
+            "parent_doc": resource.parent_doc,
+            "chapter": resource.chapter,
+            "section": resource.section,
+            "chunk_index": resource.chunk_index,
         },
         message="Resource details retrieved successfully",
     )

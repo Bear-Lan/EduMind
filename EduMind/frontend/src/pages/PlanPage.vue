@@ -145,7 +145,9 @@ async function loadConceptTree() {
     return;
   }
 
-  treeLoading.value = true;
+  // 已有树时不要切 loading：否则 SVG 被拆掉，markmap 实例失联，图会“消失”
+  const hasExisting = !!(conceptTree.value?.children?.length);
+  if (!hasExisting) treeLoading.value = true;
   try {
     if (!learningStore.profile) {
       await learningStore.fetchProfile();
@@ -156,10 +158,15 @@ async function loadConceptTree() {
         label: topicZhName.value || topic,
       },
     });
-    conceptTree.value = res.data || null;
+    if (res?.data?.children?.length) {
+      conceptTree.value = res.data;
+    } else if (!hasExisting) {
+      conceptTree.value = res?.data || null;
+    }
+    // 刷新失败/空结果时保留旧树，避免整图消失
   } catch (err) {
     console.error('Failed to load chapter concept tree', err);
-    conceptTree.value = null;
+    if (!hasExisting) conceptTree.value = null;
   } finally {
     treeLoading.value = false;
   }

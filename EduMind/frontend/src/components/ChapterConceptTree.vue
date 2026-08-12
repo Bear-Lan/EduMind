@@ -1,10 +1,11 @@
 <template>
   <div class="skill-tree">
-    <div v-if="loading" class="tree-empty">正在加载本章掌握度导图…</div>
-    <div v-else-if="!root || !root.children?.length" class="tree-empty">
+    <!-- 首次加载：还没有数据时才整块切到 loading，避免刷新时拆掉 SVG 导致 markmap 失联 -->
+    <div v-if="loading && !hasTree" class="tree-empty">正在加载本章掌握度导图…</div>
+    <div v-else-if="!loading && !hasTree" class="tree-empty">
       本章暂无入库教辅要点。请确认已 seed 对应 topic 的学习资源。
     </div>
-    <div v-else class="tree-stage">
+    <div v-else class="tree-stage" :class="{ refreshing: loading }">
       <div class="stage-top">
         <div class="legend">
           <span v-for="item in legend" :key="item.level" class="legend-item">
@@ -50,6 +51,10 @@ const svgRef = ref(null);
 const wrapRef = ref(null);
 let mm = null;
 const transformer = new Transformer();
+
+const hasTree = computed(
+  () => !!(props.root && Array.isArray(props.root.children) && props.root.children.length)
+);
 
 const MASTERY_COLORS = {
   0: '#64748b',
@@ -147,21 +152,54 @@ function buildOptions() {
   };
 }
 
-function initMarkmap() {
-  if (!svgRef.value) return;
-  mm = Markmap.create(svgRef.value, buildOptions());
-  render();
+function destroyMarkmap() {
+  try {
+    mm?.destroy?.();
+  } catch (_) {
+    /* ignore */
+  }
+  mm = null;
+  if (svgRef.value) {
+    // 清掉残留 SVG 子节点，避免二次 create 叠层或空白
+    while (svgRef.value.firstChild) {
+      svgRef.value.removeChild(svgRef.value.firstChild);
+    }
+  }
+}
+
+function ensureMarkmap() {
+  if (!svgRef.value) return false;
+  // SVG 被 v-if 拆掉重建后，旧 mm 仍非空但已挂在失效节点上，必须重建
+  let svgAlive = false;
+  try {
+    svgAlive = mm?.svg?.node?.() === svgRef.value;
+  } catch (_) {
+    svgAlive = false;
+  }
+  if (!mm || !svgAlive) {
+    destroyMarkmap();
+    mm = Markmap.create(svgRef.value, buildOptions());
+  }
+  return !!mm;
 }
 
 function render() {
-  if (!mm || !props.root) return;
+  if (!props.root || !hasTree.value) return;
+  if (!ensureMarkmap()) return;
   const pure = toPureNode(props.root, false);
   mm.setData(pure);
-  mm.fit();
+  // fit 放到下一帧，避免 modal 关闭后容器尺寸尚未稳定导致空白
+  requestAnimationFrame(() => {
+    try {
+      mm?.fit?.();
+    } catch (_) {
+      /* ignore */
+    }
+  });
 }
 
 function expandAll() {
-  if (!mm) return;
+  if (!ensureMarkmap()) return;
   mm.setOptions({ ...buildOptions(), initialExpandLevel: -1 });
   render();
 }
@@ -214,22 +252,34 @@ function findMarkmapNodeByLeafId(leafId) {
   return found;
 }
 
-onMounted(async () => {
+async function syncMarkmap() {
   await nextTick();
-  initMarkmap();
+  if (!hasTree.value) {
+    destroyMarkmap();
+    return;
+  }
+  render();
+}
+
+onMounted(() => {
+  syncMarkmap();
 });
 
+// root 一变就重绘（精讲/做题完成后的刷新路径）
 watch(
   () => props.root,
   () => {
-    if (!mm) initMarkmap();
-    else render();
-  },
-  { deep: false }
+    syncMarkmap();
+  }
 );
 
+// 首次从空树切到有树时，SVG 刚挂载，需要等 DOM 再 init
+watch(hasTree, (now, prev) => {
+  if (now && !prev) syncMarkmap();
+});
+
 onBeforeUnmount(() => {
-  mm = null;
+  destroyMarkmap();
 });
 
 const masteryPercent = computed(() => {
@@ -268,6 +318,12 @@ const masteryPercent = computed(() => {
   border: 1px solid rgba(167, 139, 250, 0.18);
   backdrop-filter: blur(8px);
   box-sizing: border-box;
+  position: relative;
+  transition: opacity 0.2s ease;
+}
+.tree-stage.refreshing {
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .stage-top {

@@ -282,15 +282,18 @@ async def main():
         # 1) 查重准备
         for item in RESOURCES:
             existing = (await db.execute(
-                select(LearningResource).where(LearningResource.title == item["title"])
-            )).scalar_one_or_none()
+                select(LearningResource).where(
+                    (LearningResource.parent_doc == item["title"])
+                    | (LearningResource.title == item["title"])
+                )
+            )).scalars().first()
             if existing:
                 skipped += 1
                 continue
 
-            # 2) 编码 + 写入 Qdrant + 写 DB
+            # 2) 编码 + 写入 Qdrant + 写 DB（按 chunk 切分）
             try:
-                resource = await rag_module.upsert_resource(
+                chunks = await rag_module.upsert_document(
                     db=db,
                     title=item["title"],
                     subject=item["subject"],
@@ -299,7 +302,7 @@ async def main():
                     source=item.get("source"),
                 )
                 inserted += 1
-                logger.info(f"✓ {item['title']} (id={resource.id})")
+                logger.info(f"✓ {item['title']} ({len(chunks)} chunk(s), first id={chunks[0].id})")
             except Exception as exc:
                 failed += 1
                 logger.error(f"✗ {item['title']}: {exc}")

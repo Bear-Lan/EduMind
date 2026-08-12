@@ -65,9 +65,39 @@ async def init_db() -> None:
         import models  # noqa: F401 – triggers registration of all ORM models via __init__.py
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_ensure_sqlite_chunk_columns)
         logger.info("Database tables verified / created")
     except Exception as exc:
         logger.warning(f"Database not available at startup: {exc}")
+
+
+def _ensure_sqlite_chunk_columns(sync_conn) -> None:
+    """
+    Dev-friendly SQLite alter: create_all won't add new columns to existing tables.
+    No-op on non-SQLite dialects (use alembic there).
+    """
+    try:
+        dialect = sync_conn.dialect.name
+    except Exception:
+        return
+    if dialect != "sqlite":
+        return
+
+    rows = sync_conn.exec_driver_sql("PRAGMA table_info(learning_resources)").fetchall()
+    existing = {r[1] for r in rows}  # column name
+    alters = []
+    if "parent_doc" not in existing:
+        alters.append("ALTER TABLE learning_resources ADD COLUMN parent_doc VARCHAR(255)")
+    if "chapter" not in existing:
+        alters.append("ALTER TABLE learning_resources ADD COLUMN chapter VARCHAR(255)")
+    if "section" not in existing:
+        alters.append("ALTER TABLE learning_resources ADD COLUMN section VARCHAR(255)")
+    if "chunk_index" not in existing:
+        alters.append(
+            "ALTER TABLE learning_resources ADD COLUMN chunk_index INTEGER NOT NULL DEFAULT 0"
+        )
+    for sql in alters:
+        sync_conn.exec_driver_sql(sql)
 
 
 async def close_db() -> None:
