@@ -9,8 +9,12 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
 
+import logging
+
 # Locate the project root .env file dynamically
 _env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+
+_jwt_default_key_warned = False
 
 
 class Settings(BaseSettings):
@@ -80,7 +84,7 @@ class Settings(BaseSettings):
     embedding_api_key: str = ""
     embedding_base_url: str = "https://api.openai.com/v1"
     embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 384
+    embedding_dimensions: int = 384  # matches text-embedding-3-small; set 1024 for bge-m3 in .env
 
     # DeepSeek LLM
     deepseek_api_key: str = ""
@@ -104,7 +108,18 @@ class Settings(BaseSettings):
     @property
     def jwt_signing_key(self) -> str:
         """Return the single key used for both JWT signing and verification."""
-        return self.jwt_secret_key or "default_secret_key_for_testing"
+        global _jwt_default_key_warned
+        if self.jwt_secret_key:
+            return self.jwt_secret_key
+        # Loud warning — default key is insecure and must not be used in production.
+        # Log only once to avoid flooding logs on every JWT operation.
+        if not _jwt_default_key_warned:
+            _jwt_default_key_warned = True
+            logging.getLogger(__name__).warning(
+                "⚠️  JWT_SECRET_KEY is empty — using insecure default key. "
+                "Set JWT_SECRET_KEY in .env before any real deployment."
+            )
+        return "default_secret_key_for_testing"
 
     # CORS
     cors_origins: str = "http://localhost:5173"

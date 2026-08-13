@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/auth';
 
 // Create Axios instance
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000/api/v1',
+  baseURL: '/api/v1',
   timeout: 300000, // Increased to 5 minutes (300,000 ms) for slow LLM responses
 });
 

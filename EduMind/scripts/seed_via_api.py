@@ -76,22 +76,24 @@ MULTI_SUBJECT_DATA = [
 
 async def main():
     async with httpx.AsyncClient(timeout=30) as client:
-        username = "seed_admin"
-        password = "SeedPass999!"
-        await client.post(f"{BASE}/auth/register", json={
-            "username": username, "password": password, "name": "Seed Admin", "subject": "数学"
-        })
+        # /resources/seed now requires admin authentication
+        import os
+        username = os.environ.get("ADMIN_USERNAME", "edumind_admin")
+        password = os.environ.get("ADMIN_PASSWORD", "")
+        if not password:
+            print("[FAIL] Set ADMIN_PASSWORD env var (admin login password)")
+            sys.exit(1)
 
-        login = await client.post(f"{BASE}/auth/login", json={
+        login = await client.post(f"{BASE}/admin/login", json={
             "username": username, "password": password
         })
         if login.status_code != 200:
-            print(f"[FAIL] Login failed: {login.text}")
+            print(f"[FAIL] Admin login failed: {login.text}")
             sys.exit(1)
 
         token = login.json()["data"]["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        print(f"[OK] Logged in as {username}")
+        print(f"[OK] Logged in as admin {username}")
 
         resp = await client.post(
             f"{BASE}/resources/seed",

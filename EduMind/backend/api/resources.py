@@ -13,9 +13,10 @@ from pydantic import BaseModel
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.dependencies import get_db, get_current_student
+from core.dependencies import get_db, get_current_student, get_current_admin
 from schemas.response import StandardResponse
 from models.student import Student
+from models.admin import AdminUser
 from models.resource import LearningResource
 from models.quiz import QuizQuestion
 from rag import rag_module
@@ -70,10 +71,14 @@ class ResourceSeedItem(BaseModel):
 @router.post("/seed", response_model=StandardResponse)
 async def seed_resources(
     items: list[ResourceSeedItem],
-    current_student: Student = Depends(get_current_student),
+    admin: AdminUser = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ) -> StandardResponse:
-    """Ingest a list of learning resources into the RAG pipeline (idempotent)."""
+    """Ingest a list of learning resources into the RAG pipeline (idempotent).
+
+    Restricted to administrators — students cannot inject content into the
+    knowledge base.
+    """
     seeded = 0
     skipped = 0
     for item in items:
@@ -425,7 +430,7 @@ async def notes_to_quiz(
     """
     notes = (payload.notes or "").strip()
     if len(notes) < 20:
-        raise ValidationError("notes", "笔记内容过短，请至少粘贴 20 个字符")
+        raise ValidationError("笔记内容过短，请至少粘贴 20 个字符")
 
     # Resolve subject/grade from student profile if not provided
     subject = payload.subject

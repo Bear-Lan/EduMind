@@ -127,5 +127,37 @@ async def client_app():
 
 @app.get("/")
 async def root():
-    """Root endpoint — redirects to API docs."""
+    """Root endpoint — serves frontend if built, else redirects to API docs."""
+    frontend_dist = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "frontend", "dist",
+    )
+    if os.path.isdir(frontend_dist):
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
     return {"message": "EduMind V1 API", "docs": "/docs", "health": "/api/v1/health"}
+
+
+# ── Serve built frontend (deploy mode) ──────────────────────────────
+_frontend_dist = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "frontend", "dist",
+)
+if os.path.isdir(_frontend_dist):
+    from fastapi.staticfiles import StaticFiles
+
+    # Serve static assets (js, css, images)
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(_frontend_dist, "assets")),
+        name="assets",
+    )
+
+    # SPA fallback: any non-API route returns index.html
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("redoc"):
+            return {"message": "Not Found", "path": full_path}
+        file_path = os.path.join(_frontend_dist, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(_frontend_dist, "index.html"))

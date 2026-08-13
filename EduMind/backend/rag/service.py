@@ -60,7 +60,12 @@ class RAGModule:
         return self._client
 
     async def _ensure_collection(self, client: AsyncQdrantClient) -> None:
-        """Verify the Qdrant collection exists; creates it if not present."""
+        """Verify the Qdrant collection exists; creates it if not present.
+
+        Also validates that an existing collection's vector dimensions match
+        the current runtime embedding config — a mismatch will cause search
+        failures and is logged loudly.
+        """
         collection_name = settings.qdrant_collection_name
         try:
             collections_response = await client.get_collections()
@@ -75,6 +80,25 @@ class RAGModule:
                         distance=models.Distance.COSINE,
                     ),
                 )
+            else:
+                # Validate dimension match for existing collection
+                try:
+                    info = await client.get_collection(collection_name)
+                    vectors = info.config.params.vectors
+                    # vectors can be a single VectorParams or a dict of named vectors
+                    if isinstance(vectors, dict):
+                        existing_size = next(iter(vectors.values())).size
+                    else:
+                        existing_size = vectors.size
+                    expected = model_config_service.runtime.embedding_dimensions
+                    if int(existing_size) != int(expected):
+                        logger.error(
+                            f"⚠️  Qdrant collection '{collection_name}' has "
+                            f"vector size {existing_size} but settings expect "
+                            f"{expected}. Delete data/qdrant_storage and re-seed."
+                        )
+                except Exception as dim_exc:
+                    logger.debug(f"Could not validate collection dimensions: {dim_exc}")
         except Exception as exc:
             logger.error(
                 f"Failed to ensure Qdrant collection '{collection_name}': {exc}"

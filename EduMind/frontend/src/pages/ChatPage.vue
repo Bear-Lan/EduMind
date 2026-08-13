@@ -185,7 +185,11 @@ async function loadHistory() {
   try {
     const res = await api.get('/chat/history');
     if (res.data && res.data.length > 0) {
-      messages.value = res.data;
+      // API returns role='assistant', template expects 'coach' for Markdown rendering
+      messages.value = res.data.map(m => ({
+        ...m,
+        role: m.role === 'assistant' ? 'coach' : m.role,
+      }));
     }
   } catch (err) {
     console.error('Failed to load chat history:', err);
