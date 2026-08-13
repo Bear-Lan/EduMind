@@ -13,6 +13,9 @@ from llm.prompts import (
     COACH_SYSTEM_PROMPT,
     CHAT_PROMPT_TEMPLATE,
     CHAT_PROMPT_TEMPLATE_NO_CONTEXT,
+    SOCRATIC_SYSTEM_PROMPT,
+    SOCRATIC_PROMPT_TEMPLATE,
+    SOCRATIC_PROMPT_TEMPLATE_NO_CONTEXT,
     EXPLAIN_PROMPT_TEMPLATE,
     EXPLAIN_PROMPT_TEMPLATE_NO_CONTEXT,
     SUMMARIZE_PROMPT_TEMPLATE,
@@ -20,6 +23,7 @@ from llm.prompts import (
     GENERATE_QUIZ_PROMPT,
     GENERATE_STRUCTURED_QUIZ_PROMPT,
     GRADE_QUIZ_PROMPT,
+    MAGIC_NOTES_QUIZ_PROMPT,
 )
 from core.exceptions import ServiceUnavailableError
 
@@ -393,7 +397,16 @@ class LLMService:
             logger.error(f"Failed calling LLM API: {exc}", exc_info=True)
             raise ServiceUnavailableError("LLM Service Connection")
 
-    async def chat(self, prompt: str, context: str, profile_summary: str, grade: str = "通用", runtime_api_key: str = "") -> str:
+    async def chat(
+        self,
+        prompt: str,
+        context: str,
+        profile_summary: str,
+        grade: str = "通用",
+        runtime_api_key: str = "",
+        mode: str = "normal",
+        conversation_history: str = "",
+    ) -> str:
         """
         Engage in an AI coaching conversation with grade/stage adaptation.
 
@@ -401,30 +414,52 @@ class LLMService:
         - When `context` is empty / marked insufficient, use the NO_CONTEXT template
           to force a "资料不足" refusal and forbid fabrication.
         - Otherwise use the normal template with retrieved context.
+
+        mode:
+        - "normal"  (default): standard heuristic coaching
+        - "socratic": Socratic dialogue — never give the answer, only guide via questions
         """
-        # An empty/whitespace context, or the explicit "no material" marker,
-        # both trigger the refusal branch.
         ctx_clean = (context or "").strip()
         insufficient = (not ctx_clean) or ctx_clean.startswith("（资料不足")
 
-        if insufficient:
-            user_content = CHAT_PROMPT_TEMPLATE_NO_CONTEXT.format(
-                grade=grade,
-                goal=profile_summary,
-                mastery_summary=profile_summary,
-                question=prompt,
-            )
+        if mode == "socratic":
+            system_prompt = SOCRATIC_SYSTEM_PROMPT
+            if insufficient:
+                user_content = SOCRATIC_PROMPT_TEMPLATE_NO_CONTEXT.format(
+                    grade=grade,
+                    goal=profile_summary,
+                    mastery_summary=profile_summary,
+                    question=prompt,
+                )
+            else:
+                user_content = SOCRATIC_PROMPT_TEMPLATE.format(
+                    grade=grade,
+                    goal=profile_summary,
+                    mastery_summary=profile_summary,
+                    context=ctx_clean,
+                    conversation_history=conversation_history or "（无）",
+                    question=prompt,
+                )
         else:
-            user_content = CHAT_PROMPT_TEMPLATE.format(
-                grade=grade,
-                goal=profile_summary,
-                mastery_summary=profile_summary,
-                context=ctx_clean,
-                question=prompt,
-            )
+            system_prompt = COACH_SYSTEM_PROMPT
+            if insufficient:
+                user_content = CHAT_PROMPT_TEMPLATE_NO_CONTEXT.format(
+                    grade=grade,
+                    goal=profile_summary,
+                    mastery_summary=profile_summary,
+                    question=prompt,
+                )
+            else:
+                user_content = CHAT_PROMPT_TEMPLATE.format(
+                    grade=grade,
+                    goal=profile_summary,
+                    mastery_summary=profile_summary,
+                    context=ctx_clean,
+                    question=prompt,
+                )
 
         messages = [
-            {"role": "system", "content": COACH_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
 
@@ -593,6 +628,56 @@ class LLMService:
         if not data.get("stem") or not data.get("question_type") or not data.get("correct_answer"):
             return None
         return data
+
+    async def generate_quiz_from_notes(
+        self,
+        notes: str,
+        subject: str = "通用",
+        grade: str = "通用",
+        runtime_api_key: str = "",
+    ) -> list[dict]:
+        """
+        Magic Notes: turn a block of study notes into a structured quiz set.
+
+        Returns a list of quiz dicts (same shape as QuizQuestion fields).
+        Falls back to an empty list on mock/offline or parse failure.
+        """
+        notes_clean = (notes or "").strip()
+        if not notes_clean:
+            return []
+
+        prompt = MAGIC_NOTES_QUIZ_PROMPT.format(
+            subject=subject or "通用",
+            grade=grade or "通用",
+            notes=notes_clean[:4000],
+        )
+        response_text = await self.generate_response(
+            [{"role": "user", "content": prompt}], runtime_api_key
+        )
+
+        if "Mock AI Coach Response" in response_text or "No DEEPSEEK_API_KEY" in response_text:
+            return []
+
+        import json as _json
+        import re as _re
+        cleaned = _re.sub(r"^```(?:json)?|```$", "", response_text.strip(), flags=_re.MULTILINE).strip()
+        try:
+            data = _json.loads(cleaned)
+        except Exception as exc:
+            logger.warning("generate_quiz_from_notes JSON parse failed: %s", exc)
+            return []
+
+        if not isinstance(data, list):
+            data = [data] if isinstance(data, dict) else []
+
+        valid: list[dict] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            if not item.get("stem") or not item.get("question_type") or not item.get("correct_answer"):
+                continue
+            valid.append(item)
+        return valid
 
     async def grade_answer(self, topic: str, question: str, answer: str, runtime_api_key: str = "") -> dict:
         """Grade a student's answer and return score and feedback."""

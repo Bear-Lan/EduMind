@@ -400,3 +400,59 @@ async def get_resource_detail(
         },
         message="Resource details retrieved successfully",
     )
+
+
+# ── Magic Notes：笔记一键变刷题集 ──────────────────────────────────
+
+class NotesToQuizRequest(BaseModel):
+    """Request body for POST /resources/notes-to-quiz."""
+    notes: str
+    subject: str | None = None
+    grade: str | None = None
+
+
+@router.post("/notes-to-quiz", response_model=StandardResponse)
+async def notes_to_quiz(
+    payload: NotesToQuizRequest,
+    current_student: Student = Depends(get_current_student),
+    db: AsyncSession = Depends(get_db),
+) -> StandardResponse:
+    """
+    Magic Notes — paste study notes, get an instant structured quiz set.
+
+    Does NOT persist to the quiz bank; the frontend can optionally save
+    individual questions later via existing endpoints.
+    """
+    notes = (payload.notes or "").strip()
+    if len(notes) < 20:
+        raise ValidationError("notes", "笔记内容过短，请至少粘贴 20 个字符")
+
+    # Resolve subject/grade from student profile if not provided
+    subject = payload.subject
+    grade = payload.grade
+    if not subject or not grade:
+        student = await db.get(Student, current_student.id)
+        subject = subject or (student.subject if student else "数学") or "数学"
+        grade = grade or (student.grade if student else "通用") or "通用"
+
+    quiz_set = await llm_service.generate_quiz_from_notes(
+        notes=notes,
+        subject=subject,
+        grade=grade,
+    )
+
+    if not quiz_set:
+        return StandardResponse.ok(
+            data={"questions": [], "subject": subject, "grade": grade, "note": "未配置 API Key 或生成失败，请先在管理后台配置 LLM 密钥"},
+            message="Magic Notes 需要 AI 大脑支持",
+        )
+
+    return StandardResponse.ok(
+        data={
+            "questions": quiz_set,
+            "subject": subject,
+            "grade": grade,
+            "count": len(quiz_set),
+        },
+        message=f"已从笔记生成 {len(quiz_set)} 道题目",
+    )

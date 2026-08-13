@@ -52,6 +52,13 @@
         >
           📊 数据分析
         </button>
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'magic' }"
+          @click="activeTab = 'magic'"
+        >
+          ✨ Magic Notes
+        </button>
       </div>
 
       <div class="header-actions">
@@ -125,6 +132,11 @@
       <div v-else-if="activeTab === 'analytics'" class="analytics-container glass-panel">
         <AnalyticsPage />
       </div>
+
+      <!-- Magic Notes View -->
+      <div v-else-if="activeTab === 'magic'" class="full-tab-container glass-panel">
+        <MagicNotesPage />
+      </div>
     </main>
 
   </div>
@@ -143,6 +155,7 @@ import AssessmentPage from './AssessmentPage.vue';
 import ProgressPage from './ProgressPage.vue';
 import ErrorBookPage from './ErrorBookPage.vue';
 import KnowledgeMapPage from './KnowledgeMapPage.vue';
+import MagicNotesPage from './MagicNotesPage.vue';
 import SubjectSwitcher from '../components/SubjectSwitcher.vue';
 
 const router = useRouter();

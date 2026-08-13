@@ -84,6 +84,15 @@
 
     <!-- Input Area -->
     <div class="chat-input-area">
+      <!-- Socratic mode toggle -->
+      <div class="mode-bar">
+        <label class="mode-toggle" :class="{ active: socraticMode }" :title="socraticMode ? '苏格拉底模式已开启：教练不会直接给答案，而是用提问引导你推理' : '点击开启苏格拉底模式'">
+          <input type="checkbox" v-model="socraticMode" class="mode-checkbox" />
+          <span class="mode-indicator"></span>
+          <span class="mode-label">🧠 苏格拉底引导</span>
+        </label>
+        <span v-if="socraticMode" class="mode-hint">教练不会直接给答案，而是用提问引导你思考</span>
+      </div>
       <form @submit.prevent="sendMessage" class="chat-form">
         <textarea
           v-model="inputText"
@@ -128,6 +137,7 @@ marked.setOptions({
 const messages = ref([]);
 const inputText = ref('');
 const isTyping = ref(false);
+const socraticMode = ref(false);
 const messagesContainer = ref(null);
 const textareaRef = ref(null);
 const backendLlmConfigured = ref(false);
@@ -203,7 +213,10 @@ async function sendMessage() {
   await scrollToBottom();
 
   try {
-    const res = await api.post('/chat', { message: text });
+    const res = await api.post('/chat', {
+      message: text,
+      mode: socraticMode.value ? 'socratic' : 'normal',
+    });
     
     messages.value.push({
       role: 'coach',
@@ -459,6 +472,68 @@ function escapeHtml(text) {
   background: rgba(0, 0, 0, 0.2);
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
+}
+
+/* ── Socratic mode toggle ── */
+.mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 12px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.04);
+  transition: all var(--transition-fast, 0.2s);
+}
+
+.mode-toggle.active {
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.mode-checkbox {
+  display: none;
+}
+
+.mode-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--text-secondary, #94a3b8);
+  background: transparent;
+  transition: all var(--transition-fast, 0.2s);
+  flex-shrink: 0;
+}
+
+.mode-toggle.active .mode-indicator {
+  border-color: #a78bfa;
+  background: #a78bfa;
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.5);
+}
+
+.mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  transition: color var(--transition-fast, 0.2s);
+}
+
+.mode-toggle.active .mode-label {
+  color: #c4b5fd;
+}
+
+.mode-hint {
+  font-size: 12px;
+  color: var(--text-tertiary, #64748b);
 }
 
 .chat-form {

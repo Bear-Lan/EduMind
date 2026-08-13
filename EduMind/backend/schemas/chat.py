@@ -12,6 +12,10 @@ class ChatRequest(BaseModel):
     """Validation schema for sending questions to the AI Coach."""
 
     message: str = Field(..., min_length=1)
+    mode: str = Field(
+        "normal",
+        description="Coaching mode: 'normal' (heuristic) or 'socratic' (guided questioning)",
+    )
 
 
 class ChatReference(BaseModel):

@@ -27,7 +27,8 @@ async def chat_with_coach(
 ) -> StandardResponse[ChatResponse]:
     """Submit a question to the AI Coach and receive a structured RAG-LLM response."""
     res = await orchestrator.handle_chat(
-        db, current_student.id, payload.message
+        db, current_student.id, payload.message,
+        mode=getattr(payload, "mode", "normal") or "normal",
     )
     await db.commit()
     return StandardResponse.ok(

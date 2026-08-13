@@ -38,12 +38,15 @@ class LearningOrchestrator:
     """
 
     async def handle_chat(
-        self, db: AsyncSession, student_id: int, message: str, runtime_api_key: str = ""
+        self, db: AsyncSession, student_id: int, message: str, runtime_api_key: str = "",
+        mode: str = "normal",
     ) -> dict:
         """
         Orchestrate: Student Profile → RAG → LLM → History Save → Response
+
+        mode: "normal" or "socratic" — passed through to LLM service.
         """
-        logger.info(f"[Orchestrator] handle_chat called for student: {student_id}")
+        logger.info(f"[Orchestrator] handle_chat called for student: {student_id}, mode={mode}")
 
         # 1. Fetch student profile
         profile = await student_profile_service.get_profile(db, student_id)
@@ -70,10 +73,35 @@ class LearningOrchestrator:
             f"当前掌握度: {profile.mastery_map or {}}"
         )
 
+        # 3.5 For Socratic mode, fetch recent conversation history to give the LLM context
+        conversation_history = ""
+        if mode == "socratic":
+            session = await db.scalar(
+                select(ChatSession)
+                .where(ChatSession.student_id == student_id)
+                .order_by(ChatSession.updated_at.desc())
+                .limit(1)
+            )
+            if session:
+                recent = await db.scalars(
+                    select(ChatMessage)
+                    .where(ChatMessage.session_id == session.id)
+                    .order_by(ChatMessage.created_at.desc())
+                    .limit(10)
+                )
+                msgs = list(reversed(recent.all()))
+                if msgs:
+                    lines = []
+                    for m in msgs:
+                        role = "学生" if m.role == "user" else "教练"
+                        lines.append(f"{role}: {m.content[:200]}")
+                    conversation_history = "\n".join(lines)
+
         # 4. Generate AI Coach response
         ai_response = await llm_service.chat(
             prompt=message, context=context_string, profile_summary=profile_summary,
-            grade=grade, runtime_api_key=runtime_api_key
+            grade=grade, runtime_api_key=runtime_api_key,
+            mode=mode, conversation_history=conversation_history,
         )
 
         # 5. Save conversation history
