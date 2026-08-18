@@ -87,16 +87,22 @@ class ModelConfigService:
     async def bootstrap(self, db: AsyncSession) -> None:
         """Create the first admin and migrate environment model settings into encrypted storage."""
         admin = await db.scalar(select(AdminUser).where(AdminUser.username == settings.admin_bootstrap_username))
-        if admin is None and settings.admin_bootstrap_password:
-            admin = AdminUser(
-                username=settings.admin_bootstrap_username,
-                hashed_password=hash_password(settings.admin_bootstrap_password),
-                display_name="EduMind 系统管理员",
-                must_change_password=True,
-            )
-            db.add(admin)
-            await db.flush()
-            logger.info("Bootstrap administrator created: %s", settings.admin_bootstrap_username)
+        if admin is None:
+            if settings.admin_bootstrap_password:
+                admin = AdminUser(
+                    username=settings.admin_bootstrap_username,
+                    hashed_password=hash_password(settings.admin_bootstrap_password),
+                    display_name="EduMind 系统管理员",
+                    must_change_password=True,
+                )
+                db.add(admin)
+                await db.flush()
+                logger.info("Bootstrap administrator created: %s", settings.admin_bootstrap_username)
+            else:
+                logger.warning(
+                    "⚠️  Admin table is empty but ADMIN_BOOTSTRAP_PASSWORD is not set. "
+                    "Set it in .env to create the first administrator account."
+                )
 
         row = await db.get(SystemModelConfig, 1)
         if row is None:

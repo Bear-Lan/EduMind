@@ -81,6 +81,8 @@ class TestLearningOrchestrator(unittest.IsolatedAsyncioTestCase):
         rag_module._client = None
 
         # Seed textbook resource in Qdrant & SQLite for RAG query testing
+        # Use English subject "Mathematics" to verify Chinese-English compatibility
+        # (student.subject="数学" should still match via _EN_TO_CN_SUBJECT mapping)
         await rag_module.upsert_resource(
             db=self.db,
             title="Algebra Basics",

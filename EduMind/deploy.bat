@@ -61,12 +61,16 @@ if not exist "%~dp0frontend\dist\index.html" (
 )
 
 :: 3. Check if data exists, warn if not
-if not exist "%~dp0data\edumind.db" (
-    echo [WARN] data\edumind.db not found. The app will create an empty database on first run.
-    echo [WARN] To load demo data, run: venv\Scripts\python.exe scripts\seed_demo_student.py
-    echo [WARN] Then run: venv\Scripts\python.exe scripts\seed_resources_v2.py
-    echo.
+if not exist "%~dp0backend\data\edumind.db" (
+    echo [WARN] Database not found. The app will create an empty database on first run.
 )
+if not exist "%~dp0data\qdrant_storage" (
+    echo [WARN] Vector store not found. It will be created automatically on first resource seed.
+)
+echo.
+echo [HINT] After the server starts, open a NEW terminal and run seed_demo.bat
+echo        to load demo student + textbook resources for the presentation.
+echo.
 
 :: 4. Start single server (backend serves API + frontend)
 echo ======================================================================

@@ -166,9 +166,12 @@ class TestRAGAndEmbedding(unittest.IsolatedAsyncioTestCase):
         await self.db.commit()
 
         context_string = rag_module.build_context([res1])
-        self.assertIn("Title: Algebra Basics", context_string)
-        self.assertIn("Algebra content details.", context_string)
+        # New format: [Document 1]: {loc} | Subject: ... | Topic: ...\nContent: ...
         self.assertIn("[Document 1]:", context_string)
+        self.assertIn("Algebra Basics", context_string)
+        self.assertIn("Subject: Math", context_string)
+        self.assertIn("Topic: Algebra", context_string)
+        self.assertIn("Content: Algebra content details.", context_string)
 
 
 if __name__ == "__main__":

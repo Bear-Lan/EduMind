@@ -67,6 +67,40 @@ class LearningOrchestrator:
         resources = [res for res, _ in scored]
         context_string = rag_module.build_context(resources)
 
+        # 2.5 Hard-constraint refusal: no reliable textbook retrieved → refuse
+        #     without calling the LLM (prevents fabrication, saves API cost).
+        if not resources:
+            insufficient_msg = (
+                "资料不足：未能在教材知识库中找到与您的问题相关度足够的内容。"
+                "请尝试更换关键词，或联系管理员补充相关教材资料。"
+            )
+            session = await db.scalar(
+                select(ChatSession)
+                .where(ChatSession.student_id == student_id)
+                .order_by(ChatSession.updated_at.desc())
+                .limit(1)
+            )
+            if not session:
+                session = ChatSession(
+                    student_id=student_id, conversation_summary="学习答疑"
+                )
+                db.add(session)
+                await db.flush()
+            db.add(ChatMessage(
+                session_id=session.id, role="user", content=message,
+            ))
+            db.add(ChatMessage(
+                session_id=session.id, role="assistant", content=insufficient_msg,
+            ))
+            session.updated_at = datetime.datetime.now(datetime.timezone.utc)
+            await db.flush()
+            logger.info("[Orchestrator] Refusal: no context retrieved, skipping LLM")
+            return {
+                "session_id": session.id,
+                "response": insufficient_msg,
+                "references": [],
+            }
+
         # 3. Format Student Context Summary
         profile_summary = (
             f"目标: {profile.current_goal or '无'} | "

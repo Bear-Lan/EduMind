@@ -66,6 +66,8 @@ class ResourceSeedItem(BaseModel):
     topic: str
     content: str
     source: str | None = None
+    chapter: str | None = None
+    section: str | None = None
 
 
 @router.post("/seed", response_model=StandardResponse)
@@ -101,6 +103,8 @@ async def seed_resources(
             topic=item.topic,
             content=item.content,
             source=item.source,
+            chapter=item.chapter,
+            section=item.section,
         )
         seeded += 1
     await db.commit()

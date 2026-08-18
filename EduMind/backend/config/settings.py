@@ -111,8 +111,13 @@ class Settings(BaseSettings):
         global _jwt_default_key_warned
         if self.jwt_secret_key:
             return self.jwt_secret_key
-        # Loud warning — default key is insecure and must not be used in production.
-        # Log only once to avoid flooding logs on every JWT operation.
+        # No JWT_SECRET_KEY configured
+        if not self.is_development:
+            raise RuntimeError(
+                "JWT_SECRET_KEY must be set in .env for non-development environments. "
+                "Refusing to start with an insecure default key."
+            )
+        # Development mode: allow default key with a one-time warning
         if not _jwt_default_key_warned:
             _jwt_default_key_warned = True
             logging.getLogger(__name__).warning(

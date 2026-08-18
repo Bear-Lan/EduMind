@@ -97,6 +97,18 @@ class TestAPIEndpoints(unittest.IsolatedAsyncioTestCase):
 
         rag_module._client = None
 
+        # Seed a textbook resource so chat retrieval can find context
+        # (without this, the refusal logic returns "资料不足" instead of mock LLM)
+        async with self.async_session_factory() as session:
+            await rag_module.upsert_resource(
+                db=session,
+                title="代数初步",
+                subject="数学",
+                topic="Introduction to Algebra",
+                content="Algebra uses variables like x and y to solve equations.",
+            )
+            await session.commit()
+
         # Build local transport client to route directly to ASGI application
         # Using ASGITransport instead of old app=app parameter for httpx >= 0.21.0
         self.client = AsyncClient(

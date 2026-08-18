@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, HttpUrl, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
 class AdminLoginRequest(BaseModel):
@@ -41,8 +41,7 @@ class AdminStudentResponse(BaseModel):
     must_change_password: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminStudentListResponse(BaseModel):

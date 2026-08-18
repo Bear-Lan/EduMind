@@ -101,13 +101,15 @@ async def generic_exception_handler(
 ) -> JSONResponse:
     logger.error(f"Unexpected error: {exc}", exc_info=True)
     origin = request.headers.get("origin", "*")
+    # In production, don't expose exception details to the client
+    detail = f"Internal server error: {str(exc)}" if settings.is_development else "Internal server error"
     return JSONResponse(
         status_code=500,
         headers={"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true"},
         content={
             "success": False,
             "code": 500,
-            "message": f"Internal server error: {str(exc)}",
+            "message": detail,
             "data": None,
         },
     )

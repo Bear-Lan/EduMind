@@ -30,6 +30,25 @@ SUBJECT_KEYS: tuple[str, ...] = (
     "计算机",
 )
 
+# English → Chinese subject name mapping for cross-language compatibility.
+# Allows resources seeded with English subjects (e.g. "Mathematics") to match
+# students registered with Chinese subjects (e.g. "数学").
+_EN_TO_CN_SUBJECT: dict[str, str] = {
+    "mathematics": "数学",
+    "math": "数学",
+    "english": "英语",
+    "physics": "物理",
+    "chemistry": "化学",
+    "biology": "生物",
+    "chinese": "语文",
+    "history": "历史",
+    "geography": "地理",
+    "politics": "政治",
+    "computer science": "计算机科学",
+    "computer": "计算机",
+    "informatics": "信息技术",
+}
+
 _GRADE_TO_STAGE: tuple[tuple[str, str], ...] = (
     ("高一", "高中"),
     ("高二", "高中"),
@@ -59,14 +78,20 @@ _GRADE_TO_STAGE: tuple[tuple[str, str], ...] = (
 
 
 def extract_subject_key(text: str | None) -> str | None:
-    """Pull canonical subject key from '高中 数学' / '数学' / '计算机科学'."""
+    """Pull canonical subject key from '高中 数学' / '数学' / 'Mathematics'."""
     raw = (text or "").strip()
     if not raw:
         return None
+    # 1. Chinese canonical keys (substring match)
     for key in SUBJECT_KEYS:
         if key in raw:
             return key
-    # Fallback: last whitespace-separated token
+    # 2. English → Chinese mapping (case-insensitive substring match)
+    raw_lower = raw.casefold()
+    for en, cn in _EN_TO_CN_SUBJECT.items():
+        if en in raw_lower:
+            return cn
+    # 3. Fallback: last whitespace-separated token
     parts = re.split(r"[\s/|·]+", raw)
     return parts[-1] if parts and parts[-1] else raw
 
